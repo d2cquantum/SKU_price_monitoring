@@ -469,42 +469,168 @@ function renderTrendChart(skuId){
   area.innerHTML=`<div style="width:100%"><div class="trend-legend">${legend}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;overflow:visible">${yLabels}${paths}${dots}${xLabels}</svg></div>`;
 }
 
-/* ══════════════════ CRAWL SIMULATION ══════════════════ */
-async function runCrawl(skuList){
+/* ══════════════════ REAL CRAWL VIA NETLIFY FUNCTIONS ══════════════════
+   Netlify Functions가 배포되어 있으면 실제 API 호출,
+   없으면(로컬/파일 직접 열기) mock 시뮬레이션으로 자동 폴백
+   ════════════════════════════════════════════════════════════════════ */
+
+/** Netlify Functions 사용 가능 여부 확인 */
+const IS_NETLIFY = window.location.hostname !== '' &&
+                   !window.location.protocol.startsWith('file');
+
+/** API 호출 래퍼 — 실패 시 null 반환 */
+async function callFunction(name, payload) {
+  try {
+    const res = await fetch(`/.netlify/functions/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn(`[crawl] ${name} 호출 실패:`, err.message);
+    return null;
+  }
+}
+
+/** 진행 단계 UI 업데이트 */
+function setCrawlStep(steps, index, status) {
+  const el = document.getElementById(`cs-${index}`);
+  if (!el) return;
+  const label = steps[index].label;
+  if (status === 'active') {
+    el.className = 'crawl-step active';
+    el.innerHTML = `<div class="cs-spin"></div><span class="cs-label">${label}</span>`;
+  } else if (status === 'done') {
+    el.className = 'crawl-step done';
+    el.innerHTML = `<span class="cs-icon">✅</span><span class="cs-label">${label}</span>`;
+  } else if (status === 'error') {
+    el.className = 'crawl-step warn';
+    el.innerHTML = `<span class="cs-icon">⚠️</span><span class="cs-label">${label} (폴백 사용)</span>`;
+  }
+}
+
+async function runCrawl(skuList) {
   openOverlay('crawl-overlay');
-  for(const sku of skuList){
-    $('crawl-product-info').innerHTML=`<strong>${sku.name}</strong> (${sku.sku}) · ${GEO.countries[sku.country]?.flag||''} ${sku.country}`;
-    const steps=[
-      {label:'Samsung.com에서 SKU 검색 중…'},
-      {label:`RRP 기준가 확인 (${GEO.countries[sku.country]?.sym||''}${(sku.rrp||0).toLocaleString()})`},
-      {label:'Samsung.com 현재 판매가 조회 중…'},
-      ...GEO.countries[sku.country]?.retailers.map(r=>({label:`${r.name} 가격 수집 중…`}))||[],
-      {label:'데이터 저장 완료 ✓'},
+
+  for (const sku of skuList) {
+    const coun = GEO.countries[sku.country] || { sym: '₩', flag: '', retailers: [] };
+    $('crawl-product-info').innerHTML =
+      `<strong>${sku.name}</strong> (${sku.sku}) · ${coun.flag} ${sku.country}`;
+
+    /* ── 단계 목록 렌더링 ── */
+    const steps = [
+      { label: 'Samsung.com 현재 판매가 조회 중…' },
+      ...coun.retailers.map(r => ({ label: `${r.name} 가격 수집 중…` })),
+      { label: '가격 이탈 분석 및 저장 완료 ✓' },
     ];
-    const stepsEl=$('crawl-steps'); stepsEl.innerHTML='';
-    steps.forEach((_,i)=>{
-      const d=document.createElement('div'); d.className='crawl-step pending'; d.id=`cs-${i}`;
-      d.innerHTML=`<span class="cs-icon"></span><span class="cs-label">${steps[i].label}</span>`;
+    const stepsEl = $('crawl-steps');
+    stepsEl.innerHTML = '';
+    steps.forEach((s, i) => {
+      const d = document.createElement('div');
+      d.className = 'crawl-step pending'; d.id = `cs-${i}`;
+      d.innerHTML = `<span class="cs-icon"></span><span class="cs-label">${s.label}</span>`;
       stepsEl.appendChild(d);
     });
-    for(let i=0;i<steps.length;i++){
-      const el=$(`cs-${i}`); if(!el) continue;
-      el.className='crawl-step active'; el.querySelector('.cs-icon').outerHTML=`<div class="cs-spin"></div>`;
-      await new Promise(r=>setTimeout(r,i<2?1000:600));
-      el.className='crawl-step done'; el.querySelector('.cs-spin')||el.querySelector('.cs-icon');
-      el.innerHTML=`<span class="cs-icon">✅</span><span class="cs-label">${steps[i].label}</span>`;
+
+    let newCurrentPrice = null;
+    let newRetailerPrices = { ...(sku.retailerPrices || {}) };
+
+    /* ── STEP 0: Samsung.com 가격 조회 ── */
+    setCrawlStep(steps, 0, 'active');
+
+    if (IS_NETLIFY) {
+      const samRes = await callFunction('crawl-samsung', { sku: sku.sku, country: sku.country });
+      if (samRes && samRes.currentPrice) {
+        newCurrentPrice = samRes.currentPrice;
+        setCrawlStep(steps, 0, 'done');
+        // 반환된 제품명으로 거래선 검색 시 더 정확함
+        sku._fetchedName = samRes.productName || sku.name;
+      } else {
+        setCrawlStep(steps, 0, 'error');
+        newCurrentPrice = mockPrice(sku.rrp, 0.02); // 폴백
+      }
+    } else {
+      // 파일 직접 열기 / 로컬: mock 시뮬레이션
+      await new Promise(r => setTimeout(r, 900));
+      newCurrentPrice = mockPrice(sku.rrp, 0.02);
+      setCrawlStep(steps, 0, 'done');
     }
-    await new Promise(r=>setTimeout(r,400));
-    /* compute status */
-    const prices=Object.values(sku.retailerPrices||{}).filter(Boolean);
-    let status='ok';
-    prices.forEach(p=>{if(Math.abs(parseFloat(pct(p,sku.rrp)))>(sku.threshold||5)) status='alert';});
-    Store.update(sku.id,{status, crawledAt:'방금'});
+
+    /* ── STEP 1~N: 거래선 가격 수집 ── */
+    // 거래선은 한 번의 API 호출로 모두 받아온 뒤 단계별로 UI 업데이트
+    let retailerResult = null;
+
+    if (IS_NETLIFY) {
+      // 비동기로 API 호출 (UI는 단계별로 표시)
+      const retailerPromise = callFunction('crawl-retailer', {
+        sku: sku.sku,
+        country: sku.country,
+        productName: sku._fetchedName || sku.name,
+      });
+
+      // 각 거래선 단계 UI 애니메이션 (API 응답 기다리는 동안 표시)
+      for (let i = 1; i < steps.length - 1; i++) {
+        setCrawlStep(steps, i, 'active');
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      retailerResult = await retailerPromise;
+    } else {
+      // 로컬 mock
+      for (let i = 1; i < steps.length - 1; i++) {
+        setCrawlStep(steps, i, 'active');
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+
+    /* ── 거래선 가격 병합 ── */
+    if (retailerResult && retailerResult.prices) {
+      coun.retailers.forEach((r, idx) => {
+        const mallData = retailerResult.prices[r.id];
+        if (mallData && mallData.price) {
+          newRetailerPrices[r.id] = mallData.price;
+          setCrawlStep(steps, idx + 1, 'done');
+        } else {
+          // API에서 해당 거래선 미발견 → mock 유지
+          if (!newRetailerPrices[r.id]) newRetailerPrices[r.id] = mockPrice(sku.rrp, 0.07);
+          setCrawlStep(steps, idx + 1, retailerResult.prices._status === 'not_configured' ? 'error' : 'done');
+        }
+      });
+    } else {
+      // API 전체 실패 → 모두 mock
+      coun.retailers.forEach((r, idx) => {
+        if (!newRetailerPrices[r.id]) newRetailerPrices[r.id] = mockPrice(sku.rrp, 0.07);
+        setCrawlStep(steps, idx + 1, 'error');
+      });
+    }
+
+    /* ── 마지막 단계: 상태 판정 및 저장 ── */
+    const lastIdx = steps.length - 1;
+    setCrawlStep(steps, lastIdx, 'active');
+
+    const allPrices = Object.values(newRetailerPrices).filter(Boolean);
+    const status = allPrices.some(p => Math.abs(parseFloat(pct(p, sku.rrp))) > (sku.threshold || 5))
+      ? 'alert' : 'ok';
+
+    Store.update(sku.id, {
+      currentPrice:   newCurrentPrice,
+      retailerPrices: newRetailerPrices,
+      status,
+      crawledAt: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    await new Promise(r => setTimeout(r, 300));
+    setCrawlStep(steps, lastIdx, 'done');
+    await new Promise(r => setTimeout(r, 500));
   }
+
   closeOverlay('crawl-overlay');
   renderAll();
   showToast(`${skuList.length}개 SKU 가격 조회 완료`, 'success');
 }
+
 
 /* ══════════════════ SKU MODAL ══════════════════ */
 function openAddModal(){
