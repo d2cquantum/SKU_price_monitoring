@@ -579,7 +579,7 @@ function bind(){
     sp.onclick=preview;
     $("#smsSave").onclick=()=>{const res=preview().filter(r=>r.ok);const r=addTx(res.map(x=>({...x,inst:instFromIssuer(x.issuer)})),"sms");toast(`${r.added}건 추가 · 중복 ${r.dup}건 제외${r.offset?` · 취소 상계 ${r.offset}건`:""}`)};
     preview();
-    $("#csvFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{let t=rd.result;if(t.includes("�")){const r2=new FileReader();r2.onload=()=>{$("#csvIn").value=r2.result};r2.readAsText(f,"euc-kr")}else $("#csvIn").value=t};rd.readAsText(f,"utf-8")};
+    $("#csvFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{let t=rd.result;if(t.includes(String.fromCharCode(0xFFFD))){const r2=new FileReader();r2.onload=()=>{$("#csvIn").value=r2.result};r2.readAsText(f,"euc-kr")}else $("#csvIn").value=t};rd.readAsText(f,"utf-8")};
     $("#csvSave").onclick=()=>{const p=parseCSV($("#csvIn").value);if(p.err){$("#csvOut").innerHTML=`<div class="note neg">${esc(p.err)}</div>`;return}
       const r=addTx(p.rows,"csv");$("#csvOut").innerHTML=`<div class="note">${p.rows.length}행 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외. 미분류 건은 거래내역 탭에서 카테고리를 지정하세요.</div>`;};
   }
