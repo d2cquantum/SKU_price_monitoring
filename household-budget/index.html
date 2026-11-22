@@ -182,20 +182,23 @@ h2.title{font-size:22px;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance;
 (function(){
 "use strict";
 /* 카테고리: '어디서 줄일 수 있나'를 보기 위해 식비·교통을 쪼갬 (장보기/외식·배달/편의점, 대중교통/택시/자동차) */
-const CATS=["장보기","외식·배달","카페·간식","편의점","대중교통","택시","자동차·주유","쇼핑","가전·가구","생활","주거·관리비","보험·공제","통신","세금·공과금","구독·렌탈","의료","교육·도서","문화·여가","경조사·선물","가족 생활비","대출상환","저축·투자","회사 대납","기타","이체","수입","미분류"];
+const CATS=["장보기","외식·배달","카페·간식","편의점","대중교통","택시","자동차·주유","쇼핑","가전·가구","생활","주거·관리비","보험·공제","통신","세금·공과금","구독·렌탈","의료","교육·도서","문화·여가","경조사·선물","가족 생활비","현금","대출상환","저축·투자","자산 거래","회사 대납","기타","이체","수입","미분류"];
 // 회사 대납: 회사·부서 비용을 내 카드로 먼저 내고 정산받는 돈 → 우리 집 지출·수입 아님
-const NON_SPEND=new Set(["이체","수입","저축·투자","회사 대납"]);
+// 자산 거래: 집 매매·대출 실행·대출 원금 일시상환·취득세 같은 목돈 이동 → 생활비 분석에서 제외
+const NON_SPEND=new Set(["이체","수입","저축·투자","회사 대납","자산 거래"]);
+const BIG_MOVE=10000000; // 은행 거래 1천만원 이상은 '자산 거래'로 (수입·이체는 그대로)
 const FIXED_CATS=new Set(["주거·관리비","보험·공제","통신","세금·공과금","구독·렌탈","대출상환","보험","구독","대출이자"]);
 const CUT_CATS=["외식·배달","카페·간식","편의점","택시","쇼핑","가전·가구","문화·여가","자동차·주유","장보기","생활"];
 const METHOD={sms:{t:"문자"},capture:{t:"캡처"},csv:{t:"엑셀·CSV"},pdf:{t:"PDF"},api:{t:"자동 수집"},mydata:{t:"마이데이터"},email:{t:"이메일"},manual:{t:"수기"}};
 const TYPE={card:"카드",bank:"은행",insurance:"보험",telecom:"통신",loan:"대출"};
 // 순서 중요: 앞의 카테고리가 먼저 걸림 (예: 이마트24 → 편의점, 던킨삼성전자점 → 카페)
 const KEYWORDS={
- "이체":["카드대금","카드결제대금","결제대금","내계좌","자동이체(카드)","대출금 지급","대출금지급"],
- "대출상환":["대출이자","이자출금","대출원리금","원리금","신용대출","대출상환"],
- "수입":["급여","월급","상여","이자입금","예금이자","결산이자","전자OPI","전자TAI","전자PS","연차보상","주식보상","전자학자금","출자유보금","전자의료비"],
- "보험·공제":["생명","화재","손해보험","보험료","손보","공제","새마을0","새마을1"],
- "통신":["SK텔레콤","SKT","KT ","케이티","LGU+","LG유플러스","유플러스","통신요금","알뜰폰","인터넷요금"],
+ "이체":["카드대금","카드결제대금","결제대금","내계좌","자동이체(카드)","대출금 지급","대출금지급","대출금입금","예금해지"],
+ "회사 대납":["전자카드비"],
+ "대출상환":["대출이자","이자출금","대출원리금","원리금","신용대출","대출상환","생명대출","융자상환"],
+ "수입":["급여","월급","상여","이자입금","예금이자","결산이자","전자OPI","전자TAI","전자PS","연차보상","주식보상","전자학자금","출자유보금","전자의료비","아동수당","양육수당","부모급여"],
+ "보험·공제":["생명","화재","삼성화","손해보험","보험료","손보","공제","새마을0","새마을1"],
+ "통신":["SK텔레콤","SKT","KT ","케이티","LGU+","LGU","LG유플러스","유플러스","통신요금","알뜰폰","인터넷요금"],
  "구독·렌탈":["넷플릭스","NETFLIX","유튜브","YouTube","멜론","쿠팡와우","디즈니","티빙","웨이브","OpenAI","Claude.ai","Google One","애플","코웨이","렌탈","SK매직","쿠쿠"],
  "주거·관리비":["관리비","도시가스","한국전력","한전","수도요금","월세"],
  "세금·공과금":["지자체세입금","재산세","자동차세","주민세","지방세","국세","교통안전공단","과태료"],
@@ -214,7 +217,7 @@ const KEYWORDS={
  "경조사·선물":["플라워","꽃집","화원","축의","부의"],
  "생활":["세탁","클리닝","미용","헤어","네일","철물"]
 };
-const KW_VER=2;
+const KW_VER=3;
 /* 사용자 기관: 우리카드·현대카드·삼성카드·우리은행·새마을금고 */
 const MY_INST=[
   {id:"wc",name:"우리카드",type:"card",method:"sms"},
@@ -248,9 +251,10 @@ function classify(merchant,inst){
   const it=S.inst.find(i=>i.id===inst);
   if(it&&it.type==="bank"&&CARD_BILL.test(m)) return "이체";
   // 연동 탭 설정: 생활비를 보내는 가족 → 지출(가족 생활비), 본인 다른 계좌 → 이체
+  // 은행 적요는 '국민홍길동', '금고김영희'처럼 은행 이름이 앞에 붙으므로 포함 여부로 봄
   const who=m.replace(/\s/g,"");
-  if(it&&it.type==="bank"&&(S.family||[]).some(n=>n&&who.startsWith(n))) return "가족 생활비";
-  if(it&&it.type==="bank"&&(S.self||[]).some(n=>n&&who.startsWith(n))) return "이체";
+  if(it&&it.type==="bank"&&(S.family||[]).some(n=>n&&who.includes(n))) return "가족 생활비";
+  if(it&&it.type==="bank"&&(S.self||[]).some(n=>n&&who.includes(n))) return "이체";
   for(const [cat,list] of Object.entries(KEYWORDS)){ if(list.some(k=>m.toUpperCase().includes(k.trim().toUpperCase()))) return cat; }
   return "미분류";
 }
@@ -703,7 +707,7 @@ function addTx(list,src){
   const k2=t=>t.date+"|"+t.amount+"|"+(t.inst||"");
   const exact={},loose={},seen={};
   S.tx.forEach(t=>{exact[k1(t)]=(exact[k1(t)]||0)+1;(loose[k2(t)]=loose[k2(t)]||[]).push(t.src)});
-  let added=0,dup=0,offset=0;
+  let added=0,dup=0,offset=0;const newRows=[];
   // 원거래를 먼저 넣고 취소를 나중에 처리 → 같은 파일 안에서 순서와 관계없이 상계
   list.filter(t=>!t.cancel).concat(list.filter(t=>t.cancel)).forEach(t=>{
     const a=k1(t);seen[a]=(seen[a]||0)+1;
@@ -718,10 +722,29 @@ function addTx(list,src){
         merchant:orig?orig.merchant+" (취소)":t.merchant+" (취소·원거래 없음)",category:orig?orig.category:classify(t.merchant,t.inst)};
       if(orig){orig.canceled=true;row.cancelOf=orig.id;offset++}else added++;
       S.tx.push(row);return}
-    S.tx.push({id:S.seq++,date:t.date,amount:t.amount,merchant:t.merchant,inst:t.inst,src,category:t.category||classify(t.merchant,t.inst)});added++;
+    const row={id:S.seq++,date:t.date,amount:t.amount,merchant:t.merchant,inst:t.inst,src,category:t.category||classify(t.merchant,t.inst)};
+    if(isBank(row.inst)&&Math.abs(row.amount)>=BIG_MOVE&&!["수입","이체","자산 거래"].includes(row.category)&&!ruleHit(row.merchant))row.category="자산 거래";
+    S.tx.push(row);newRows.push(row);added++;
   });
+  const paired=pairTransfers(newRows);
   const touched=new Set(list.map(t=>t.inst));S.inst.forEach(i=>{if(touched.has(i.id))i.last=new Date().toISOString()});
-  save();return {added,dup,offset};
+  save();return {added,dup,offset,paired};
+}
+const isBank=id=>(S.inst.find(i=>i.id===id)||{}).type==="bank";
+const ruleHit=m=>S.rules.some(r=>(m||"").includes(r.pattern));
+/* 내 계좌 간 이체 자동 인식: 서로 다른 은행에서 같은 금액이 ±1일 안에 한쪽은 출금, 한쪽은 입금이면 둘 다 '이체'
+   (예: 새마을금고 → 우리은행 자동이체가 한쪽은 '신용대출', 다른 쪽은 '급여'로 찍혀 지출·수입이 이중으로 잡히는 것 방지) */
+function pairTransfers(cands){
+  // 보험·공제, 아동수당처럼 근거가 분명한 거래끼리 금액만 같아 묶이는 것을 막기 위해 후보 카테고리를 제한
+  const OK=new Set(["미분류","이체","수입","대출상환"]);
+  const dayDiff=(a,b)=>Math.abs(new Date(a)-new Date(b))/864e5;let n=0;
+  const can=x=>isBank(x.inst)&&!x.xfer&&!x.refund&&!x.canceled&&Math.abs(x.amount)>=100000&&OK.has(x.category)&&!(x.category==="수입"&&/아동수당|양육수당|부모급여|이자|배당/.test(x.merchant));
+  for(const t of cands){
+    if(!can(t))continue;
+    const o=S.tx.find(x=>x!==t&&can(x)&&x.inst!==t.inst&&x.amount===-t.amount&&dayDiff(x.date,t.date)<=1);
+    if(o){t.xfer=o.id;o.xfer=t.id;t.category="이체";o.category="이체";n++}
+  }
+  return n;
 }
 
 /* ---------- Excel / CSV ---------- */
@@ -747,8 +770,10 @@ const numOf=s=>{const t=String(s??"").replace(/[^\d.\-]/g,"");return t?+t||0:0};
 // 은행 '거래구분' 열로 알 수 있는 분류 (예: 새마을금고 상환/공제/이자/배당)
 const BANK_CH=/뱅킹|타행|당행|대체|펌뱅킹|오픈|비대면|지로|자동이체|CD|ATM|창구|입금|출금|이체|카드/;
 function memoCat(memo,amount){
-  if(/^상환$|대출상환|원리금/.test(memo))return "대출상환";
+  if(/^상환$|대출상환|원리금|^대출이자$/.test(memo))return "대출상환";
   if(/^공제$/.test(memo))return "보험·공제";
+  if(/^통신요금$/.test(memo))return "통신";
+  if(/현금지급|현금인출|^CD$|^ATM/.test(memo)&&amount<0)return "현금";
   if(/^(이자|배당|결산)$/.test(memo)&&amount>0)return "수입";
   return null;
 }
@@ -830,7 +855,8 @@ function bankRowsFromText(text){
 }
 async function fileRows(file){
   if(/\.csv$|\.txt$/i.test(file.name))return parseCSVText(await readText(file));
-  if(/\.pdf$/i.test(file.name)){const rows=bankRowsFromText(await pdfText(file));
+  if(/\.pdf$/i.test(file.name)){const txt=await pdfText(file);const rows=bankRowsFromText(txt);
+    if(txt.replace(/\s/g,"").length<50)throw new Error("이 PDF는 글자 없이 그림으로만 되어 있어 읽을 수 없습니다 (보안메일을 '인쇄 → PDF'로 저장하면 이렇게 됩니다). 은행 앱·홈페이지에서 거래내역을 엑셀로 받아 올려 주세요.");
     if(rows.length<2)throw new Error("이 PDF에서 거래 줄(날짜·출금액·입금액·잔액)을 찾지 못했습니다. 은행 거래내역 PDF만 읽을 수 있습니다. 엑셀로 받아 올려 주세요.");
     return rows}
   const XLSX=await loadXLSX();
@@ -892,7 +918,7 @@ function bind(){
       try{const p=mapRows(await fileRows(f),$("#fileInst").value);
         if(p.err){out.innerHTML=`<p class="note alert">${esc(p.err)}</p>`;return}
         const r=addTx(p.rows,/\.pdf$/i.test(f.name)?"pdf":"csv");
-        out.innerHTML=`<p class="note">${esc(f.name)} · ${p.rows.length}건 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외${r.offset?` · 취소 상계 ${r.offset}건`:""}${p.skipped?` · 건너뜀 ${p.skipped}줄`:""}<br><span class="cap">인식한 열: ${esc(p.header.join(", "))}</span></p>`;
+        out.innerHTML=`<p class="note">${esc(f.name)} · ${p.rows.length}건 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외${r.offset?` · 취소 상계 ${r.offset}건`:""}${r.paired?` · 내 계좌 간 이체 ${r.paired}쌍`:""}${p.skipped?` · 건너뜀 ${p.skipped}줄`:""}<br><span class="cap">인식한 열: ${esc(p.header.join(", "))}</span></p>`;
       }catch(err){out.innerHTML=`<p class="note alert">${esc(err.message||"파일을 읽지 못했습니다")}</p>`}
       e.target.value=""};
   }
@@ -924,8 +950,11 @@ function intake(){
 }
 
 // 분류 규칙이 바뀌면 미분류 거래만 다시 분류 (사용자가 직접 고른 카테고리는 건드리지 않음)
-function reclassify(pred){let n=0;S.tx.forEach(t=>{if(t.refund&&t.cancelOf)return;if(!pred(t))return;
-  const c=classify(t.key||t.merchant,t.inst);if(c!==t.category){t.category=c;n++}});return n}
+function reclassify(pred){let n=0;S.tx.forEach(t=>{if((t.refund&&t.cancelOf)||t.xfer)return;if(!pred(t))return;
+  let c=classify(t.key||t.merchant,t.inst);
+  if(isBank(t.inst)&&Math.abs(t.amount)>=BIG_MOVE&&!["수입","이체"].includes(c)&&!ruleHit(t.merchant))c="자산 거래";
+  if(c!==t.category){t.category=c;n++}});
+  n+=pairTransfers(S.tx);return n}
 S=load()||seed();
 if(!S.month)S.month=ym(today);
 if(!S.sample&&(S.kwVer||1)<KW_VER){reclassify(t=>t.category==="미분류");S.kwVer=KW_VER;save()}
