@@ -227,7 +227,7 @@ const MY_INST=[
   {id:"mg",name:"새마을금고",type:"bank",method:"csv"}
 ];
 const KEY="hb-proto-v1";
-let S=null, tab="dash", txFilter={cat:"",src:"",q:""}, pendingSms=null, armed=null;
+let S=null, tab="dash", txFilter={cat:"",src:"",q:""}, pendingSms=null, armed=null, force=false, pendingFile=null;
 const $=s=>document.querySelector(s);
 const won=n=>(n<0?"−":"")+Math.abs(Math.round(n)).toLocaleString("ko-KR")+"원";
 const man=n=>{const a=Math.abs(n);return a>=10000?(Math.round(a/1000)/10).toLocaleString("ko-KR")+"만":Math.round(a).toLocaleString("ko-KR")};
@@ -360,7 +360,7 @@ function dash(){
   const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   const maxCat=Math.max(1,...cats.map(c=>Math.max(c[1],S.budget.cats[c[0]]||0)));
   const unc=cur.filter(t=>t.category==="미분류"&&!t.canceled&&!t.cancelOf).length;
-  const fixed=S.recurring.map(r=>({...r,paid:cur.some(t=>t.merchant.includes(r.match)&&t.amount<0&&!t.canceled)})).sort((a,b)=>a.day-b.day);
+  const hits=matchRecurring(cur);const fixed=S.recurring.map(r=>({...r,paid:hits.has(r.id)})).sort((a,b)=>a.day-b.day);
   const fixedTotal=S.recurring.reduce((s,r)=>s+r.amount,0);
   const timeMark=isCur?`<i style="left:${dayNow/dim*100}%" title="오늘"></i>`:"";
   return `${sampleBanner()}
@@ -438,6 +438,8 @@ function importView(){
     <div class="field full"><label for="csvFile">파일 (.xls .xlsx .csv · 은행 거래내역 .pdf)</label><input type="file" id="csvFile" accept=".csv,.xls,.xlsx,.pdf,text/csv,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
    </div>
    <div id="csvOut" style="margin-top:12px"></div>`)}
+  ${sec("최근 가져오기",(S.imports||[]).length?`${S.imports.length}회`:"",(S.imports||[]).length?`<p class="cap" style="margin:0 0 6px">기관을 잘못 골랐거나 잘못 올렸으면 <b>되돌리기</b>로 그 묶음만 통째로 지운 뒤 다시 올리세요.</p><div class="rows">${S.imports.map(b=>{const n=S.tx.filter(t=>t.batch===b.id).length;const d=new Date(b.at);
+    return `<div class="row"><div class="d" style="font-size:13px">${pad(d.getMonth()+1)}.${pad(d.getDate())}<small>${pad(d.getHours())}:${pad(d.getMinutes())}</small></div><div class="m"><b>${esc(b.label)}</b><span class="meta">${esc(b.insts.map(instName).join("·")||"기관 미확인")}<span class="sep">/</span>${n}건</span></div><div class="a"><button class="link" id="undo-${b.id}" data-undo="${b.id}">되돌리기</button></div></div>`}).join("")}</div>`:`<p class="cap" style="margin:0">아직 없습니다. 이번 버전부터 올린 묶음은 여기서 되돌릴 수 있습니다.</p>`)}
   ${sec("중복 처리","",`<p class="note">같은 기관·같은 날·같은 금액·같은 가맹점이면 한 건으로 봅니다. 기간이 겹치는 파일·캡처를 몇 번 올려도 이미 있는 거래는 건너뛰고, 같은 날 같은 금액이 실제로 여러 번이면 그 횟수만큼만 남깁니다. 문자·캡처·엑셀·PDF처럼 출처가 다르면 가맹점 이름이 조금 달라도 같은 기관·날짜·금액으로 맞춥니다. 카드 취소는 원래 결제와 상계하고, 은행의 카드대금 출금은 ‘이체’로 분류합니다.</p>`)}`;
 }
 function linkView(){
@@ -559,17 +561,17 @@ function fixedView(){
   const sum=cats=>S.recurring.filter(r=>cats.includes(r.category)).reduce((s,r)=>s+r.amount,0);
   const total=S.recurring.reduce((s,r)=>s+r.amount,0);
   const cand=detectSubs();
-  const isCur=S.month===ym(today);
+  const isCur=S.month===ym(today);const hits=matchRecurring(cur);
   return `<section class="sec pad"><h3 class="label">월 고정비</h3><div class="hero num">${total.toLocaleString("ko-KR")}<small>원</small></div><div class="cap">연간 ${won(total*12)}</div></section>
   <section class="pad"><div class="stats">
-    <div><span class="cap">보험</span><b class="num">${man(sum(["보험"]))}</b></div>
-    <div><span class="cap">통신·구독</span><b class="num">${man(sum(["통신","구독"]))}</b></div>
+    <div><span class="cap">보험·공제</span><b class="num">${man(sum(["보험","보험·공제"]))}</b></div>
+    <div><span class="cap">통신·구독</span><b class="num">${man(sum(["통신","구독","구독·렌탈"]))}</b></div>
     <div><span class="cap">주거·관리비</span><b class="num">${man(sum(["주거·관리비"]))}</b></div>
-    <div><span class="cap">대출이자</span><b class="num">${man(sum(["대출이자"]))}</b></div></div></section>
-  ${sec("목록","출금 내역과 키워드로 자동 매칭",`<div class="rows">${S.recurring.slice().sort((a,b)=>a.day-b.day).map(r=>{const hit=cur.find(t=>t.merchant.includes(r.match)&&t.amount<0&&!t.canceled);const diff=hit&&Math.abs(hit.amount)!==r.amount;
+    <div><span class="cap">대출</span><b class="num">${man(sum(["대출이자","대출상환"]))}</b></div></div></section>
+  ${sec("목록","출금 내역과 키워드·금액으로 자동 매칭",`<div class="rows">${S.recurring.slice().sort((a,b)=>a.day-b.day).map(r=>{const hit=hits.get(r.id);const diff=hit&&Math.abs(hit.amount)!==r.amount;
     const st=hit?(diff?`<small class="alert">금액 변동 ${man(hit.amount)}</small>`:`<small class="acc">${+hit.date.slice(8)}일 출금</small>`):(isCur&&r.day>=today.getDate()?`<small style="color:var(--muted)">예정</small>`:`<small class="alert">내역 없음</small>`);
-    return `<div class="row"><div class="d">${pad(r.day)}<small>매월</small></div><div class="m"><b>${esc(r.name)}</b><span class="meta">${esc(r.category)}<span class="sep">/</span>${esc(instName(r.inst))}<span class="sep">/</span>키워드 “${esc(r.match)}”<span class="sep">/</span><button class="link" data-delrec="${r.id}">삭제</button></span></div><div class="a num">${won(-r.amount)}${st}</div></div>`}).join("")}</div>`)}
-  ${cand.length?sec("고정비 후보","최근 3개월 반복 결제",`<div class="rows">${cand.map(c=>`<div class="row"><div class="d">${pad(c.day)}<small>평균</small></div><div class="m"><b>${esc(c.merchant)}</b><span class="meta">${c.months}개월 연속</span></div><div class="a num">${won(c.amount)}<small><button class="link" data-addrec="${esc(c.merchant)}">등록</button></small></div></div>`).join("")}</div>`):""}
+    return `<div class="row"><div class="d">${pad(r.day)}<small>매월</small></div><div class="m"><b>${esc(r.name)}</b><span class="meta">${esc(r.category)}<span class="sep">/</span>${esc(instName(r.inst))}<span class="sep">/</span>키워드 “${esc(r.match)}”${sameKw(r)?" · 금액으로 구분":""}<span class="sep">/</span><button class="link" data-delrec="${r.id}">삭제</button></span></div><div class="a num">${won(-r.amount)}${st}</div></div>`}).join("")}</div>`)}
+  ${cand.length?sec("고정비 후보","최근 3개월 반복 결제",`<div class="rows">${cand.map(c=>`<div class="row"><div class="d">${pad(c.day)}<small>평균</small></div><div class="m"><b>${esc(c.merchant)}</b><span class="meta">${c.months}개월 연속</span></div><div class="a num">${won(c.amount)}<small><button class="link" data-addrec="${esc(c.merchant)}" data-amt="${Math.abs(c.amount)}">등록</button></small></div></div>`).join("")}</div>`):""}
   ${sec("직접 추가","",`<form id="addRec" class="form">
    <div class="field full"><label for="rName">항목</label><input id="rName" placeholder="예: 자동차보험" required></div>
    <div class="field full"><label for="rMatch">매칭 키워드</label><input id="rMatch" placeholder="출금 내역에 찍히는 이름" required></div>
@@ -577,10 +579,24 @@ function fixedView(){
    <div class="field"><label for="rDay">납부일</label><input id="rDay" type="number" min="1" max="31" required></div>
    <button class="btn solid block full">추가</button></form>`)}`;
 }
+/* 고정비 ↔ 출금 매칭: 키워드가 같은 고정비가 여러 개여도(예: 같은 이름으로 나가는 계모임 3만원·1만원)
+   금액이 같은 출금부터 짝짓고, 남은 것은 금액이 가장 가까운 출금과 짝지음. 출금 한 건은 고정비 하나에만 쓰임 */
+// 키워드 비교는 띄어쓰기·하이픈·밑줄 차이를 무시 (예: "납부자-카카" = "납부자_카카")
+const kwN=s=>String(s||"").replace(/[\s\-_·.()]/g,"");
+const kwHit=(m,k)=>!!k&&kwN(m).includes(kwN(k));
+function matchRecurring(list){
+  const used=new Set(),hit=new Map();
+  const cands=r=>list.filter(t=>!used.has(t.id)&&t.amount<0&&!t.canceled&&!t.cancelOf&&kwHit(t.merchant,r.match));
+  S.recurring.forEach(r=>{const t=cands(r).find(t=>-t.amount===r.amount);if(t){used.add(t.id);hit.set(r.id,t)}});
+  S.recurring.forEach(r=>{if(hit.has(r.id))return;const t=cands(r).sort((a,b)=>Math.abs(-a.amount-r.amount)-Math.abs(-b.amount-r.amount))[0];if(t){used.add(t.id);hit.set(r.id,t)}});
+  return hit;
+}
+const sameKw=r=>S.recurring.some(o=>o!==r&&kwN(o.match)===kwN(r.match));
 function detectSubs(){
   const m0=S.month,ms=[m0,shiftMonth(m0,-1),shiftMonth(m0,-2)],map={};
   S.tx.filter(t=>t.amount<0&&!t.canceled&&ms.some(m=>t.date.startsWith(m))&&!NON_SPEND.has(t.category)).forEach(t=>{const k=norm(t.merchant)+"|"+Math.abs(t.amount);(map[k]=map[k]||{merchant:t.merchant,amount:t.amount,set:new Set(),days:[]}).set.add(t.date.slice(0,7));map[k].days.push(+t.date.slice(8))});
-  return Object.values(map).filter(v=>v.set.size>=2&&!S.recurring.some(r=>v.merchant.includes(r.match))).map(v=>({merchant:v.merchant,amount:v.amount,months:v.set.size,day:Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length)}));
+  // 이미 등록된 고정비와 키워드·금액이 모두 같을 때만 후보에서 뺌 (같은 키워드라도 금액이 다르면 별도 후보)
+  return Object.values(map).filter(v=>v.set.size>=2&&!S.recurring.some(r=>kwHit(v.merchant,r.match)&&r.amount===Math.abs(v.amount))).map(v=>({merchant:v.merchant,amount:v.amount,months:v.set.size,day:Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length)}));
 }
 function guideView(){
   const M=[
@@ -705,7 +721,9 @@ function instFromIssuer(s){
 }
 
 /* ---------- add with dedup ---------- */
-function addTx(list,src){
+function addTx(list,src,label){
+  // 가져오기 한 번 = 묶음(batch) 하나. 잘못 올린 묶음은 '최근 가져오기'에서 통째로 되돌릴 수 있음
+  const batch=S.seq++;
   // key: 원본 가맹점명 (취소 행은 표시용 이름에 "(취소)"가 붙으므로 원문을 따로 보관)
   const k1=t=>t.date+"|"+t.amount+"|"+(t.inst||"")+"|"+norm(t.key||t.merchant);
   const k2=t=>t.date+"|"+t.amount+"|"+(t.inst||"");
@@ -722,17 +740,31 @@ function addTx(list,src){
       const same=o=>norm(o.merchant)===norm(t.merchant);
       const c=S.tx.filter(o=>o.amount===-t.amount&&!o.canceled&&!o.refund&&(!t.inst||o.inst===t.inst));
       const orig=c.find(o=>o.date===t.date&&same(o))||c.filter(o=>same(o)&&o.date<=t.date).sort(byDate)[0]||c.find(o=>o.date===t.date);
-      const row={id:S.seq++,date:t.date,amount:t.amount,key:t.merchant,inst:t.inst||(orig&&orig.inst),src,refund:true,
+      const row={id:S.seq++,batch,date:t.date,amount:t.amount,key:t.merchant,inst:t.inst||(orig&&orig.inst),src,refund:true,
         merchant:orig?orig.merchant+" (취소)":t.merchant+" (취소·원거래 없음)",category:orig?orig.category:classify(t.merchant,t.inst)};
       if(orig){orig.canceled=true;row.cancelOf=orig.id;offset++}else added++;
       S.tx.push(row);return}
-    const row={id:S.seq++,date:t.date,amount:t.amount,merchant:t.merchant,inst:t.inst,src,category:t.category||classify(t.merchant,t.inst,t.amount)};
+    const row={id:S.seq++,batch,date:t.date,amount:t.amount,merchant:t.merchant,inst:t.inst,src,category:t.category||classify(t.merchant,t.inst,t.amount)};
     if(isBank(row.inst)&&Math.abs(row.amount)>=BIG_MOVE&&!["수입","이체","자산 거래"].includes(row.category)&&!ruleHit(row.merchant))row.category="자산 거래";
     S.tx.push(row);newRows.push(row);added++;
   });
   const paired=pairTransfers(newRows);
   const touched=new Set(list.map(t=>t.inst));S.inst.forEach(i=>{if(touched.has(i.id))i.last=new Date().toISOString()});
+  if(added||offset){const insts=[...new Set(list.map(t=>t.inst).filter(Boolean))];
+    S.imports=[{id:batch,label:label||METHOD[src]?.t||src,src,insts,at:new Date().toISOString(),added:added+offset}].concat(S.imports||[]).slice(0,30)}
   save();return {added,dup,offset,paired};
+}
+// 가져오기 되돌리기: 그 묶음으로 들어온 거래를 지우고, 그 묶음이 바꿔 놓은 다른 거래(취소 상계·내 계좌 이체 묶음)도 원래대로
+function undoImport(id){
+  const mine=new Set(S.tx.filter(t=>t.batch===id).map(t=>t.id));
+  S.tx.forEach(t=>{
+    if(mine.has(t.id))return;
+    if(t.canceled&&S.tx.some(r=>mine.has(r.id)&&r.cancelOf===t.id))t.canceled=false;      // 이 묶음의 취소로 상계됐던 원거래 복구
+    if(t.cancelOf&&mine.has(t.cancelOf)){delete t.cancelOf;t.merchant=t.merchant.replace(/ \(취소\)$/," (취소·원거래 없음)")}
+    if(t.xfer&&mine.has(t.xfer)){delete t.xfer;t.category=classify(t.key||t.merchant,t.inst,t.amount);
+      if(isBank(t.inst)&&Math.abs(t.amount)>=BIG_MOVE&&!["수입","이체"].includes(t.category)&&!ruleHit(t.merchant))t.category="자산 거래"}
+  });
+  const n=mine.size;S.tx=S.tx.filter(t=>!mine.has(t.id));S.imports=(S.imports||[]).filter(b=>b.id!==id);save();return n;
 }
 const isBank=id=>(S.inst.find(i=>i.id===id)||{}).type==="bank";
 const ruleHit=m=>S.rules.some(r=>(m||"").includes(r.pattern));
@@ -814,7 +846,8 @@ function mapRows(rows,inst){
     const mc=memo?memoCat(memo,amount)||(BANK_CH.test(memo)?"미분류":classify(memo,inst)):"미분류";
     out.push({date,merchant,amount,inst,cancel,category:mc!=="미분류"?mc:null});
   });
-  return {rows:out,skipped,header:h.filter(Boolean)};
+  // bankLike: 입금·출금(또는 잔액) 열이 따로 있는 표 = 은행 거래내역
+  return {rows:out,skipped,header:h.filter(Boolean),bankLike:(oi>=0&&ii>=0)||h.some(x=>/^잔액|거래후잔액/.test(x))};
 }
 let xlsxLoading=null;
 function loadXLSX(){
@@ -909,29 +942,43 @@ function bind(){
   document.querySelectorAll("[data-delrule]").forEach(b=>b.onclick=()=>{S.rules.splice(+b.dataset.delrule,1);save();render()});
   const at=$("#addTx");if(at)at.onsubmit=e=>{e.preventDefault();const amt=Math.abs(+$("#nAmount").value)*+$("#nType").value;
     const r=addTx([{date:$("#nDate").value,merchant:$("#nMerchant").value.trim(),amount:amt,inst:null,category:amt>0?"수입":null}],"manual");toast(r.added?"추가했습니다":"같은 거래가 이미 있습니다");render()};
-  const ar=$("#addRec");if(ar)ar.onsubmit=e=>{e.preventDefault();const c=classify($("#rMatch").value);S.recurring.push({id:S.seq++,name:$("#rName").value.trim(),match:$("#rMatch").value.trim(),amount:Math.abs(+$("#rAmount").value),day:+$("#rDay").value,category:c!=="미분류"?c:"기타",inst:null});save();toast("고정비를 추가했습니다");render()};
+  // 고정비 등록: 키워드·금액이 같은 항목이 이미 있으면 막고, 키워드만 같으면 "금액으로 구분"한다고 알려줌
+  const addRecurring=r=>{
+    if(S.recurring.some(o=>kwN(o.match)===kwN(r.match)&&o.amount===r.amount)){toast(`“${r.match}” ${won(r.amount)} 고정비가 이미 있습니다`);return false}
+    const twin=S.recurring.filter(o=>kwN(o.match)===kwN(r.match));
+    S.recurring.push({id:S.seq++,...r});save();
+    toast(twin.length?`등록했습니다 · 키워드가 같은 ${twin.map(o=>won(o.amount)).join(", ")} 항목과는 금액으로 구분해 매칭합니다`:"고정비로 등록했습니다");render();return true};
+  const ar=$("#addRec");if(ar)ar.onsubmit=e=>{e.preventDefault();const c=classify($("#rMatch").value);addRecurring({name:$("#rName").value.trim(),match:$("#rMatch").value.trim(),amount:Math.abs(+$("#rAmount").value),day:+$("#rDay").value,category:c!=="미분류"?c:"기타",inst:null})};
   document.querySelectorAll("[data-delrec]").forEach(b=>b.onclick=()=>{S.recurring=S.recurring.filter(r=>r.id!==+b.dataset.delrec);save();render()});
-  document.querySelectorAll("[data-addrec]").forEach(b=>b.onclick=()=>{const m=b.dataset.addrec;const t=S.tx.filter(x=>x.merchant===m).sort(byDate)[0];
-    S.recurring.push({id:S.seq++,name:m,match:m.split(" ")[0],amount:Math.abs(t.amount),day:+t.date.slice(8),category:t.category,inst:t.inst});save();toast("고정비로 등록했습니다");render()});
+  document.querySelectorAll("[data-addrec]").forEach(b=>b.onclick=()=>{const m=b.dataset.addrec,amt=+b.dataset.amt;
+    const t=S.tx.filter(x=>x.merchant===m&&-x.amount===amt).sort(byDate)[0]||S.tx.filter(x=>x.merchant===m).sort(byDate)[0];
+    addRecurring({name:m+(S.recurring.some(o=>kwN(o.match)===kwN(m.split(" ")[0]))?` ${man(amt)}원`:""),match:m.split(" ")[0],amount:amt||Math.abs(t.amount),day:+t.date.slice(8),category:t.category,inst:t.inst})});
   const sp=$("#smsParse");if(sp){
     const isList=()=>looksLikeList($("#smsIn").value);
     const preview=()=>{const v=$("#smsIn").value,fb=$("#pasteInst").value||null;
       const res=isList()?parseListText(v,fb):parseSMS(v).map(r=>({...r,inst:r.inst||fb||instFromIssuer(r.issuer)}));$("#smsOut").innerHTML=smsRows(res);return res};
     sp.onclick=preview;
     $("#smsSave").onclick=()=>{const list=isList();const all=preview();const res=all.filter(r=>r.ok);if(!res.length){toast("추가할 수 있는 거래가 없습니다");return}
-      const r=addTx(res,list?"capture":"sms");pendingSms="";$("#smsIn").value="";
+      const r=addTx(res,list?"capture":"sms",list?"캡처 붙여넣기":"문자");pendingSms="";$("#smsIn").value="";render();
       const skipped=all.filter(x=>x.listCancel).length;
       toast(`${r.added}건 추가${r.dup?` · 중복 ${r.dup}건 제외`:""}${r.offset?` · 취소 상계 ${r.offset}건`:""}${skipped?` · 거래취소 ${skipped}건 제외`:""}${all.length>res.length+skipped?` · 확인 필요 ${all.length-res.length-skipped}건`:""}`)};
     if($("#smsIn").value.trim())preview();
     $("#csvFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;const out=$("#csvOut");out.innerHTML=`<p class="cap">읽는 중…</p>`;
-      try{const p=mapRows(await fileRows(f),$("#fileInst").value);
+      try{const instId=$("#fileInst").value,it=S.inst.find(i=>i.id===instId)||{};const p=mapRows(await fileRows(f),instId);
         if(p.err){out.innerHTML=`<p class="note alert">${esc(p.err)}</p>`;return}
-        const r=addTx(p.rows,/\.pdf$/i.test(f.name)?"pdf":"csv");
-        out.innerHTML=`<p class="note">${esc(f.name)} · ${p.rows.length}건 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외${r.offset?` · 취소 상계 ${r.offset}건`:""}${r.paired?` · 내 계좌 간 이체 ${r.paired}쌍`:""}${p.skipped?` · 건너뜀 ${p.skipped}줄`:""}<br><span class="cap">인식한 열: ${esc(p.header.join(", "))}</span></p>`;
+        // 기관 종류와 파일 모양이 다르면 올리지 않음 (예: 은행 거래내역을 카드로 선택)
+        if(p.bankLike!==(it.type==="bank")&&!force){
+          out.innerHTML=`<p class="note alert">${p.bankLike?`이 파일은 입금·출금·잔액 열이 있는 <b>은행 거래내역</b>인데 <b>${esc(it.name)}</b>(카드)을 고르셨습니다.`:`이 파일은 <b>카드 이용내역</b> 모양인데 <b>${esc(it.name)}</b>(은행)을 고르셨습니다.`} 기관을 다시 골라 올려 주세요. 맞다면 <button class="link" id="forceUp">그래도 ${esc(it.name)}(으)로 올리기</button></p>`;
+          pendingFile=f;$("#forceUp").onclick=()=>{force=true;$("#csvFile").onchange({target:{files:[pendingFile],value:""}})};return}
+        force=false;
+        const r=addTx(p.rows,/\.pdf$/i.test(f.name)?"pdf":"csv",f.name);
+        const msg=`<p class="note">${esc(f.name)} · ${p.rows.length}건 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외${r.offset?` · 취소 상계 ${r.offset}건`:""}${r.paired?` · 내 계좌 간 이체 ${r.paired}쌍`:""}${p.skipped?` · 건너뜀 ${p.skipped}줄`:""}<br><span class="cap">인식한 열: ${esc(p.header.join(", "))}</span></p>`;
+        render();$("#csvOut").innerHTML=msg;
       }catch(err){out.innerHTML=`<p class="note alert">${esc(err.message||"파일을 읽지 못했습니다")}</p>`}
       e.target.value=""};
   }
   const bf=$("#budgetForm");if(bf)bf.onsubmit=e=>{e.preventDefault();const v=Math.max(0,Math.round(+$("#budgetIn").value||0));S.budget.total=v||S.budget.total;save();toast("월 예산을 "+won(S.budget.total)+"으로 저장했습니다")};
+  document.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>twoStep(b,"이 묶음을 지웁니다 · 한 번 더",()=>{const n=undoImport(+b.dataset.undo);toast(`${n}건을 지웠습니다. 기관을 확인해 다시 올려 주세요`);render()}));
   document.querySelectorAll("[data-ana]").forEach(b=>b.onclick=()=>{S.anaN=+b.dataset.ana;save();render()});
   const sf=$("#selfForm");if(sf)sf.onsubmit=e=>{e.preventDefault();const names=v=>v.split(/[,，]/).map(s=>s.replace(/\s/g,"")).filter(Boolean);
     S.self=names($("#selfIn").value);S.family=names($("#famIn").value);
