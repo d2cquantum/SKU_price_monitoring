@@ -592,7 +592,7 @@ function matchRecurring(list){
   return hit;
 }
 const sameKw=r=>S.recurring.some(o=>o!==r&&kwN(o.match)===kwN(r.match));
-// 은행 자동이체 적요 끝의 매달 바뀌는 일련번호를 뗀 이름 (예: "삼성화09103" → "삼성화"). 숫자만 남으면 원래 이름
+// 은행 자동이체 적요 끝의 매달 바뀌는 일련번호를 뗀 이름 (예: "가나보험09103" → "가나보험"). 숫자만 남으면 원래 이름
 const recBase=m=>{const b=String(m||"").trim().replace(/\d{3,}$/,"").trim();return b.length>=2?b:String(m||"").trim()};
 function detectSubs(){
   const m0=S.month,ms=[m0,shiftMonth(m0,-1),shiftMonth(m0,-2)],map={};
