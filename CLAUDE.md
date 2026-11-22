@@ -17,7 +17,7 @@
 - **확정된 운영 방식 (바꾸려면 사용자에게 먼저 확인):**
   - **안드로이드 + 로컬 전용(방식 A).** 모든 데이터는 휴대폰 크롬의 `localStorage`(키 `hb-proto-v1`)에만 저장. 서버·DB·로그인 없음, 외부 전송 없음.
   - 연동 대상 기관 5곳: **우리카드 · 현대카드 · 삼성카드 · 우리은행 · 새마을금고** (`MY_INST`의 id: `wc`, `hc`, `sc`, `wb`, `mg`).
-  - 데이터 수집: 카드 승인 **문자(SMS) 공유**(실시간) + **월 1회 엑셀/CSV 업로드** + 고정비 수기 등록. 스크래핑 API·마이데이터는 사용하지 않음 (`PLAN.md`에 비교 검토 있음).
+  - 데이터 수집: 카드 승인 **문자(SMS) 공유**(실시간) + **엑셀/CSV·은행 PDF 업로드** + 카드 앱 **캡처 텍스트 붙여넣기** + 고정비 수기 등록. 기간이 겹쳐도 수시로 올릴 수 있어야 함(중복 제거 필수). 스크래핑 API·마이데이터는 사용하지 않음 (`PLAN.md`에 비교 검토 있음).
 - **주소:** 정식 `https://skupricemonitoring.netlify.app/household-budget/`. `localStorage`는 주소별로 분리되므로 미리보기 주소의 데이터는 정식 주소에 보이지 않는다.
 
 ## 파일 구조
@@ -35,16 +35,18 @@
 
 IIFE 하나 안에 다음 순서로 들어 있다.
 
-- **상수:** `CATS`(카테고리), `NON_SPEND`(이체·수입은 지출 집계 제외), `METHOD`(출처: sms/csv/manual …), `KEYWORDS`(카테고리 키워드 사전), `MY_INST`
-- **상태 `S`:** `{sample, inst[], accounts[], tx[], rules[], recurring[], budget:{total,cats}, seq, month, lastBackup}`
-  - 거래 `tx`: `{id, date:"YYYY-MM-DD", amount(지출 음수/수입 양수), merchant, inst, src, category, canceled?}`
+- **상수:** `CATS`(카테고리), `NON_SPEND`(이체·수입·저축·회사 대납은 지출 집계 제외), `FIXED_CATS`(고정비), `CUT_CATS`(절감 후보), `METHOD`(출처: sms/capture/csv/pdf/manual …), `KEYWORDS`(카테고리 키워드 사전), `MY_INST`
+- **상태 `S`:** `{sample, inst[], accounts[], tx[], rules[], recurring[], budget:{total,cats}, seq, month, lastBackup, self[], family[], kwVer, anaN}`
+  - 거래 `tx`: `{id, date:"YYYY-MM-DD", amount(지출 음수/수입 양수), merchant, inst, src, category, canceled?, refund?, cancelOf?, key?}`. 취소 행은 `refund:true`(+원거래 id `cancelOf`), 원거래는 `canceled:true`. 지출 집계는 `spendVal(t)`로만 계산
   - `rules`: 사용자가 카테고리를 바꾸면 `{pattern(가맹점 첫 단어), category}`가 앞에 추가되고 키워드 사전보다 우선
 - **데이터:** `seed()` 예시 데이터(`S.sample=true`), `fresh()` 빈 상태로 시작, `save()/load()`
-- **분류:** `classify(merchant, inst)`: 사용자 규칙 → 은행 거래의 카드대금 출금은 `이체` → 키워드 사전 → `미분류`
-- **화면:** `render()` → 탭별 `dash`, `txView`, `fixedView`, `importView`, `linkView`, `guideView`. 이벤트는 매 렌더 후 `bind()`에서 다시 연결
+- **분류:** `classify(merchant, inst)`: 사용자 규칙 → 은행의 카드대금 출금은 `이체` → 은행에서 `S.family` 이름은 `가족 생활비`, `S.self` 이름은 `이체` → 키워드 사전(순서가 우선순위) → `미분류`. 은행 `거래구분`은 `memoCat()`(상환·공제·이자), 경로 단어(스마트뱅킹·타행…, `BANK_CH`)는 분류에 쓰지 않음. `KW_VER`를 올리면 로드 시 미분류만 다시 분류
+- **화면:** `render()` → 탭별 `dash`, `txView`, `fixedView`, `anaView`(분석: 3·6·12개월 월평균, 고정/변동, 절감 후보, 많이 쓴 곳, 30만원 이상 단건), `importView`, `linkView`, `guideView`. 이벤트는 매 렌더 후 `bind()`에서 다시 연결
 - **문자 파싱:** `detectInst()`(기관 판별: 새마을/MG → mg, 현대 → hc, 삼성(+카드 문맥) → sc, 우리+카드 문맥 → wc, 그 외 우리 → wb), `parseSMS()`(빈 줄 또는 `[Web발신]` 단위로 분리, 누적·잔액 금액 제외, 날짜 뒤 첫 의미 있는 줄을 가맹점으로)
 - **엑셀/CSV:** `fileRows()`(.xls/.xlsx는 SheetJS `xlsx@0.18.5`를 cdnjs에서 필요할 때만 로드, .csv는 UTF-8 실패 시 EUC-KR 재시도) → `mapRows()`(앞 40줄에서 제목 줄 탐지, 날짜·가맹점·금액 또는 입금/출금 열 탐지, 은행 `적요`로 보조 분류, 합계 줄 제외)
-- **중복 제거:** `addTx(list, src)`. 동일 키(날짜+금액+기관+가맹점 앞부분)는 같은 개수까지만 허용, 출처가 다르면(문자 vs 엑셀) 날짜+금액+기관만 같아도 중복. 취소 문자는 원거래와 상계
+- **PDF:** 은행 거래내역 PDF를 pdf.js(cdnjs `pdf.js/3.11.174`)로 읽어 `bankRowsFromText()`가 `날짜 시간 구분 내용 출금 입금 잔액` 표로 바꾼 뒤 `mapRows()`로 넘김. 글자 단위로 쪼개진 PDF가 있어 좌표로 이어 붙임
+- **캡처 텍스트:** `looksLikeList()`이면 `parseListText()`(날짜 머리줄 → 가맹점 → `카드 · 일시불` → `N원`, `거래취소`는 제외, 같은 날짜 안에서 가맹점·금액을 순서대로 짝지음), 출처 `capture`
+- **중복 제거:** `addTx(list, src)`. 동일 키(날짜+금액+기관+가맹점 앞부분)는 같은 개수까지만 허용, 출처가 다르면(문자 vs 엑셀) 날짜+금액+기관만 같아도 중복. 취소(문자·엑셀 `취소여부`)는 원거래와 상계, 원거래를 먼저 처리한 뒤 취소를 처리
 - **공유 유입:** `intake()`. `?text=`/`?title=`(공유) 또는 `#sms=…&auto=1`(자동화 앱) 처리 후 `history.replaceState`로 주소 정리
 - **백업:** `exportBackup()`(JSON 다운로드 + 클립보드), `importBackup()`
 - **테스트용 훅:** `window.__hb = {parseSMS, mapRows, parseCSVText, classify}`
@@ -54,14 +56,14 @@ IIFE 하나 안에 다음 순서로 들어 있다.
 - **무채색 위주.** 포인트 색은 두 가지만: 코발트(`--accent`: 데이터 강조·진행선·수입·"출금 확인"·링크), 주홍(`--alert`: 예산 초과·내역 없음·금액 변동·확인 필요). 지출 금액은 기본 글자색.
 - **각진 모서리.** `border-radius: 0` 전역. 알약 모양 태그, 원형 점, 아이콘 타일, 카드 박스, 그림자 없음.
 - **도형 최소화.** 구역은 1px 선으로만 나누고, 위계는 글자 크기·굵기로. 막대그래프는 2px 선. 상태는 색 글자로 표시.
-- 모바일 단일 열(최대 480px), 하단 글자 전용 탭 바(홈·내역·고정비·가져오기·연동), 숫자는 IBM Plex Mono, 본문은 IBM Plex Sans KR.
+- 모바일 단일 열(최대 480px), 하단 글자 전용 탭 바(홈·내역·고정비·분석·가져오기·연동), 숫자는 IBM Plex Mono, 본문은 IBM Plex Sans KR.
 - 색은 모두 `:root` 토큰으로 정의하고 라이트/다크 둘 다 유지.
 
 ## 작업 규칙
 
 - **개인정보:** 사용자의 실제 거래·문자·엑셀 내용, 이름, 카드번호, 계좌번호를 커밋·코드 예시·테스트 데이터에 넣지 않는다. 파서 개선용 샘플은 사용자가 가린 것을 바탕으로 **가상의 값으로 바꿔서** 사용.
-- **로컬 전용 원칙 유지:** 거래 데이터를 외부로 보내는 코드(분석, 로그, API 호출)를 추가하지 않는다. 외부 스크립트는 cdnjs의 SheetJS와 Google Fonts뿐.
-- **확인 방법:** 빌드·테스트 프레임워크 없음. 수정 후 Playwright(헤드리스 Chromium)로 index.html을 열어
+- **로컬 전용 원칙 유지:** 거래 데이터를 외부로 보내는 코드(분석, 로그, API 호출)를 추가하지 않는다. 외부 스크립트는 cdnjs의 SheetJS·pdf.js와 Google Fonts뿐 (파일 내용은 브라우저 안에서만 처리).
+- **확인 방법:** 빌드·테스트 프레임워크 없음. 수정 후 Playwright(헤드리스 Chromium)로 index.html을 열어 (Playwright가 없으면 데스크톱 앱 내장 브라우저로 같은 항목 확인)
   1. 콘솔 오류 없음
   2. 가져오기 탭의 예시 문자 5건이 모두 올바른 기관·금액·가맹점으로 파싱되는지
   3. `window.__hb.mapRows()`에 은행형(제목 줄 + 입금/출금 열)·카드형 표를 넣어 결과 확인
@@ -72,7 +74,8 @@ IIFE 하나 안에 다음 순서로 들어 있다.
 ## 현재 상태와 다음 할 일
 
 - **완료 (PR #1 병합):** 모바일 앱 UI, PWA 설치·공유 대상, 5개 기관 문자 파서, 엑셀/CSV 가져오기, 중복 제거, 고정비 매칭, 예산, 백업.
-- **미검증:** 실제 기관 문자·엑셀 형식(예시로만 테스트함), 실기기 설치·공유 메뉴 동작.
+- **완료:** 실제 삼성카드 엑셀·새마을금고 PDF·현대카드 캡처로 검증 (취소 상계, 중복 제거, PDF 합계 일치), 분석 탭, 가족 생활비·회사 대납 분류.
+- **미검증:** 실제 기기의 갤러리 "텍스트 추출" 결과 형식, 우리은행·우리카드 파일 형식, 실기기 설치·공유 메뉴 동작.
 - **다음 할 일:**
   1. 사용자가 가린 실제 문자·엑셀 샘플을 받아 `parseSMS`/`mapRows` 보정
   2. 카테고리별 예산 편집 UI (현재는 총 예산만 설정 가능, `S.budget.cats`는 비어 있음)
