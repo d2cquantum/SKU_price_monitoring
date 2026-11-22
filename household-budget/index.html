@@ -592,9 +592,11 @@ function matchRecurring(list){
   return hit;
 }
 const sameKw=r=>S.recurring.some(o=>o!==r&&kwN(o.match)===kwN(r.match));
+// 은행 자동이체 적요 끝의 매달 바뀌는 일련번호를 뗀 이름 (예: "가나보험09103" → "가나보험"). 숫자만 남으면 원래 이름
+const recBase=m=>{const b=String(m||"").trim().replace(/\d{3,}$/,"").trim();return b.length>=2?b:String(m||"").trim()};
 function detectSubs(){
   const m0=S.month,ms=[m0,shiftMonth(m0,-1),shiftMonth(m0,-2)],map={};
-  S.tx.filter(t=>t.amount<0&&!t.canceled&&ms.some(m=>t.date.startsWith(m))&&!NON_SPEND.has(t.category)).forEach(t=>{const k=norm(t.merchant)+"|"+Math.abs(t.amount);(map[k]=map[k]||{merchant:t.merchant,amount:t.amount,set:new Set(),days:[]}).set.add(t.date.slice(0,7));map[k].days.push(+t.date.slice(8))});
+  S.tx.filter(t=>t.amount<0&&!t.canceled&&!t.cancelOf&&ms.some(m=>t.date.startsWith(m))&&!NON_SPEND.has(t.category)).forEach(t=>{const b=recBase(t.merchant);const k=kwN(b)+"|"+Math.abs(t.amount);(map[k]=map[k]||{merchant:b,amount:t.amount,set:new Set(),days:[]}).set.add(t.date.slice(0,7));map[k].days.push(+t.date.slice(8))});
   // 이미 등록된 고정비와 키워드·금액이 모두 같을 때만 후보에서 뺌 (같은 키워드라도 금액이 다르면 별도 후보)
   return Object.values(map).filter(v=>v.set.size>=2&&!S.recurring.some(r=>kwHit(v.merchant,r.match)&&r.amount===Math.abs(v.amount))).map(v=>({merchant:v.merchant,amount:v.amount,months:v.set.size,day:Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length)}));
 }
@@ -951,8 +953,10 @@ function bind(){
   const ar=$("#addRec");if(ar)ar.onsubmit=e=>{e.preventDefault();const c=classify($("#rMatch").value);addRecurring({name:$("#rName").value.trim(),match:$("#rMatch").value.trim(),amount:Math.abs(+$("#rAmount").value),day:+$("#rDay").value,category:c!=="미분류"?c:"기타",inst:null})};
   document.querySelectorAll("[data-delrec]").forEach(b=>b.onclick=()=>{S.recurring=S.recurring.filter(r=>r.id!==+b.dataset.delrec);save();render()});
   document.querySelectorAll("[data-addrec]").forEach(b=>b.onclick=()=>{const m=b.dataset.addrec,amt=+b.dataset.amt;
-    const t=S.tx.filter(x=>x.merchant===m&&-x.amount===amt).sort(byDate)[0]||S.tx.filter(x=>x.merchant===m).sort(byDate)[0];
-    addRecurring({name:m+(S.recurring.some(o=>kwN(o.match)===kwN(m.split(" ")[0]))?` ${man(amt)}원`:""),match:m.split(" ")[0],amount:amt||Math.abs(t.amount),day:+t.date.slice(8),category:t.category,inst:t.inst})});
+    // 후보 이름은 일련번호를 뗀 이름이므로 같은 기준으로 원거래를 찾고, 그 이름 전체를 매칭 키워드로 씀
+    const same=x=>kwN(recBase(x.merchant))===kwN(m);
+    const t=S.tx.filter(x=>same(x)&&-x.amount===amt).sort(byDate)[0]||S.tx.filter(same).sort(byDate)[0];
+    addRecurring({name:m+(S.recurring.some(o=>kwN(o.match)===kwN(m))?` ${man(amt)}원`:""),match:m,amount:amt||Math.abs(t.amount),day:+t.date.slice(8),category:t.category,inst:t.inst})});
   const sp=$("#smsParse");if(sp){
     const isList=()=>looksLikeList($("#smsIn").value);
     const preview=()=>{const v=$("#smsIn").value,fb=$("#pasteInst").value||null;
