@@ -40,8 +40,8 @@ IIFE 하나 안에 다음 순서로 들어 있다.
   - 거래 `tx`: `{id, date:"YYYY-MM-DD", amount(지출 음수/수입 양수), merchant, inst, src, category, canceled?, refund?, cancelOf?, key?}`. 취소 행은 `refund:true`(+원거래 id `cancelOf`), 원거래는 `canceled:true`. 지출 집계는 `spendVal(t)`로만 계산
   - `rules`: 사용자가 카테고리를 바꾸면 `{pattern(가맹점 첫 단어), category}`가 앞에 추가되고 키워드 사전보다 우선
 - **데이터:** `seed()` 예시 데이터(`S.sample=true`), `fresh()` 빈 상태로 시작, `save()/load()`
-- **분류:** `classify(merchant, inst)`: 사용자 규칙 → 은행의 카드대금 출금은 `이체` → 은행에서 `S.family` 이름은 `가족 생활비`, `S.self` 이름은 `이체` → 키워드 사전(순서가 우선순위) → `미분류`. 은행 `거래구분`은 `memoCat()`(상환·공제·이자), 경로 단어(스마트뱅킹·타행…, `BANK_CH`)는 분류에 쓰지 않음. `KW_VER`를 올리면 로드 시 미분류만 다시 분류
-- **화면:** `render()` → 탭별 `dash`, `txView`, `fixedView`, `anaView`(분석: 3·6·12개월 월평균, 고정/변동, 절감 후보, 많이 쓴 곳, 30만원 이상 단건), `importView`, `linkView`, `guideView`. 이벤트는 매 렌더 후 `bind()`에서 다시 연결
+- **분류:** `classify(merchant, inst, amount)`: 사용자 규칙 → 은행의 카드대금 출금은 `이체` → 은행에서 `S.family` 이름은 출금이면 `가족 생활비`, 입금이면 `수입`(가족 소득, 1천만원 이상은 `자산 거래`), `S.self` 이름은 `이체` → 키워드 사전(순서가 우선순위) → `미분류`. 은행 `거래구분`은 `memoCat()`(상환·공제·이자), 경로 단어(스마트뱅킹·타행…, `BANK_CH`)는 분류에 쓰지 않음. `KW_VER`를 올리면 로드 시 미분류만 다시 분류
+- **화면:** `render()` → 탭별 `dash`, `txView`, `fixedView`, `anaView`(분석: 3·6·12개월 월평균, 고정/변동, 절감 후보, 많이 쓴 곳, 30만원 이상 단건, 미분류 사용처별 일괄 지정 `setCat()`), `importView`, `linkView`, `guideView`. 이벤트는 매 렌더 후 `bind()`에서 다시 연결
 - **문자 파싱:** `detectInst()`(기관 판별: 새마을/MG → mg, 현대 → hc, 삼성(+카드 문맥) → sc, 우리+카드 문맥 → wc, 그 외 우리 → wb), `parseSMS()`(빈 줄 또는 `[Web발신]` 단위로 분리, 누적·잔액 금액 제외, 날짜 뒤 첫 의미 있는 줄을 가맹점으로)
 - **엑셀/CSV:** `fileRows()`(.xls/.xlsx는 SheetJS `xlsx@0.18.5`를 cdnjs에서 필요할 때만 로드, .csv는 UTF-8 실패 시 EUC-KR 재시도) → `mapRows()`(앞 40줄에서 제목 줄 탐지, 날짜·가맹점·금액 또는 입금/출금 열 탐지, 은행 `적요`로 보조 분류, 합계 줄 제외)
 - **PDF:** 은행 거래내역 PDF를 pdf.js(cdnjs `pdf.js/3.11.174`)로 읽어 `bankRowsFromText()`가 `날짜 시간 구분 내용 출금 입금 잔액` 표로 바꾼 뒤 `mapRows()`로 넘김. 글자 단위로 쪼개진 PDF가 있어 좌표로 이어 붙임
