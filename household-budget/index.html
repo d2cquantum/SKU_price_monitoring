@@ -100,6 +100,7 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .row .meta{font-size:11.5px;color:var(--muted)}
 .row .meta .sep{margin:0 5px;color:var(--line)}
 .row .a{text-align:right;font-size:14.5px}
+.row.void .a{text-decoration:line-through;color:var(--muted)}
 .row .a small{display:block;font-family:var(--f-body);font-size:11.5px;letter-spacing:0}
 .pos{color:var(--accent)}
 
@@ -288,7 +289,9 @@ function fresh(){
 
 /* ---------- derived ---------- */
 const inMonth=m=>S.tx.filter(t=>t.date.startsWith(m));
-const spendOf=list=>list.filter(t=>t.amount<0&&!NON_SPEND.has(t.category)).reduce((s,t)=>s-t.amount,0);
+// 지출 기여액: 상계된 원거래·취소 쌍은 0, 원거래 없는 취소(부분취소 등)는 지출에서 차감
+const spendVal=t=>NON_SPEND.has(t.category)||t.canceled||t.cancelOf?0:t.refund?-t.amount:t.amount<0?-t.amount:0;
+const spendOf=list=>list.reduce((s,t)=>s+spendVal(t),0);
 const incomeOf=list=>list.filter(t=>t.category==="수입").reduce((s,t)=>s+t.amount,0);
 const instName=id=>(S.inst.find(i=>i.id===id)||{}).name||"수기";
 function shiftMonth(m,d){const [y,mo]=m.split("-").map(Number);return ym(new Date(y,mo-1+d,1))}
@@ -326,11 +329,11 @@ function dash(){
   const hasAcc=S.accounts.length>0;
   const assets=S.accounts.filter(a=>a.kind==="asset").reduce((s,a)=>s+a.balance,0);
   const debts=S.accounts.filter(a=>a.kind==="liability").reduce((s,a)=>s+a.balance,0);
-  const byCat={};cur.filter(t=>t.amount<0&&!NON_SPEND.has(t.category)).forEach(t=>byCat[t.category]=(byCat[t.category]||0)-t.amount);
+  const byCat={};cur.forEach(t=>{const v=spendVal(t);if(v)byCat[t.category]=(byCat[t.category]||0)+v});
   const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
   const maxCat=Math.max(1,...cats.map(c=>Math.max(c[1],S.budget.cats[c[0]]||0)));
-  const unc=cur.filter(t=>t.category==="미분류").length;
-  const fixed=S.recurring.map(r=>({...r,paid:cur.some(t=>t.merchant.includes(r.match)&&t.amount<0)})).sort((a,b)=>a.day-b.day);
+  const unc=cur.filter(t=>t.category==="미분류"&&!t.canceled&&!t.cancelOf).length;
+  const fixed=S.recurring.map(r=>({...r,paid:cur.some(t=>t.merchant.includes(r.match)&&t.amount<0&&!t.canceled)})).sort((a,b)=>a.day-b.day);
   const fixedTotal=S.recurring.reduce((s,r)=>s+r.amount,0);
   const timeMark=isCur?`<i style="left:${dayNow/dim*100}%" title="오늘"></i>`:"";
   return `${sampleBanner()}
@@ -431,7 +434,7 @@ function compare(prev,dayNow,spend){
 const byDate=(a,b)=>b.date.localeCompare(a.date)||b.id-a.id;
 function cumChart(cur,prev){
   const W=440,H=180,L=34,R=6,T=10,B=22,dim=31;
-  const series=list=>{const arr=new Array(32).fill(0);list.filter(t=>t.amount<0&&!NON_SPEND.has(t.category)).forEach(t=>arr[+t.date.slice(8)]-=t.amount);let s=0;return arr.map(v=>s+=v)};
+  const series=list=>{const arr=new Array(32).fill(0);list.forEach(t=>arr[+t.date.slice(8)]+=spendVal(t));let s=0;return arr.map(v=>s+=v)};
   const c=series(cur),p=series(prev);
   const isCur=S.month===ym(today),lastDay=isCur?today.getDate():daysIn(S.month),pDays=daysIn(shiftMonth(S.month,-1));
   const max=Math.max(S.budget.total,c[lastDay],p[pDays])*1.05;
@@ -451,8 +454,8 @@ function cumChart(cur,prev){
 function txRows(list,editable){
   if(!list.length)return `<div class="empty">거래가 없습니다</div>`;
   return list.map(t=>{const d=new Date(t.date);const srcM=METHOD[t.src]||METHOD.manual;
-    return `<div class="row"><div class="d">${pad(d.getDate())}<small>${DOW[d.getDay()]}요일</small></div>
-    <div class="m"><b>${esc(t.merchant)}</b><span class="meta">${esc(instName(t.inst))}<span class="sep">/</span>${srcM.t}<span class="sep">/</span>${editable?`<select class="tx-cat" data-id="${t.id}" aria-label="카테고리">${CATS.map(c=>`<option ${c===t.category?"selected":""}>${c}</option>`).join("")}</select>`:`<span class="${t.category==="미분류"?"alert":""}">${esc(t.category)}</span>`}</span></div>
+    return `<div class="row${t.canceled||t.cancelOf?" void":""}"><div class="d">${pad(d.getDate())}<small>${DOW[d.getDay()]}요일</small></div>
+    <div class="m"><b>${esc(t.merchant)}${t.canceled?" · 취소됨":""}</b><span class="meta">${esc(instName(t.inst))}<span class="sep">/</span>${srcM.t}<span class="sep">/</span>${editable?`<select class="tx-cat" data-id="${t.id}" aria-label="카테고리">${CATS.map(c=>`<option ${c===t.category?"selected":""}>${c}</option>`).join("")}</select>`:`<span class="${t.category==="미분류"?"alert":""}">${esc(t.category)}</span>`}</span></div>
     <div class="a num ${t.amount>0?"pos":""}">${t.amount>0?"+":""}${won(t.amount)}</div></div>`}).join("");
 }
 function txView(){
@@ -487,7 +490,7 @@ function fixedView(){
     <div><span class="cap">통신·구독</span><b class="num">${man(sum(["통신","구독"]))}</b></div>
     <div><span class="cap">주거·관리비</span><b class="num">${man(sum(["주거·관리비"]))}</b></div>
     <div><span class="cap">대출이자</span><b class="num">${man(sum(["대출이자"]))}</b></div></div></section>
-  ${sec("목록","출금 내역과 키워드로 자동 매칭",`<div class="rows">${S.recurring.slice().sort((a,b)=>a.day-b.day).map(r=>{const hit=cur.find(t=>t.merchant.includes(r.match)&&t.amount<0);const diff=hit&&Math.abs(hit.amount)!==r.amount;
+  ${sec("목록","출금 내역과 키워드로 자동 매칭",`<div class="rows">${S.recurring.slice().sort((a,b)=>a.day-b.day).map(r=>{const hit=cur.find(t=>t.merchant.includes(r.match)&&t.amount<0&&!t.canceled);const diff=hit&&Math.abs(hit.amount)!==r.amount;
     const st=hit?(diff?`<small class="alert">금액 변동 ${man(hit.amount)}</small>`:`<small class="acc">${+hit.date.slice(8)}일 출금</small>`):(isCur&&r.day>=today.getDate()?`<small style="color:var(--muted)">예정</small>`:`<small class="alert">내역 없음</small>`);
     return `<div class="row"><div class="d">${pad(r.day)}<small>매월</small></div><div class="m"><b>${esc(r.name)}</b><span class="meta">${esc(r.category)}<span class="sep">/</span>${esc(instName(r.inst))}<span class="sep">/</span>키워드 “${esc(r.match)}”<span class="sep">/</span><button class="link" data-delrec="${r.id}">삭제</button></span></div><div class="a num">${won(-r.amount)}${st}</div></div>`}).join("")}</div>`)}
   ${cand.length?sec("고정비 후보","최근 3개월 반복 결제",`<div class="rows">${cand.map(c=>`<div class="row"><div class="d">${pad(c.day)}<small>평균</small></div><div class="m"><b>${esc(c.merchant)}</b><span class="meta">${c.months}개월 연속</span></div><div class="a num">${won(c.amount)}<small><button class="link" data-addrec="${esc(c.merchant)}">등록</button></small></div></div>`).join("")}</div>`):""}
@@ -500,7 +503,7 @@ function fixedView(){
 }
 function detectSubs(){
   const m0=S.month,ms=[m0,shiftMonth(m0,-1),shiftMonth(m0,-2)],map={};
-  S.tx.filter(t=>t.amount<0&&ms.some(m=>t.date.startsWith(m))&&!NON_SPEND.has(t.category)).forEach(t=>{const k=norm(t.merchant)+"|"+Math.abs(t.amount);(map[k]=map[k]||{merchant:t.merchant,amount:t.amount,set:new Set(),days:[]}).set.add(t.date.slice(0,7));map[k].days.push(+t.date.slice(8))});
+  S.tx.filter(t=>t.amount<0&&!t.canceled&&ms.some(m=>t.date.startsWith(m))&&!NON_SPEND.has(t.category)).forEach(t=>{const k=norm(t.merchant)+"|"+Math.abs(t.amount);(map[k]=map[k]||{merchant:t.merchant,amount:t.amount,set:new Set(),days:[]}).set.add(t.date.slice(0,7));map[k].days.push(+t.date.slice(8))});
   return Object.values(map).filter(v=>v.set.size>=2&&!S.recurring.some(r=>v.merchant.includes(r.match))).map(v=>({merchant:v.merchant,amount:v.amount,months:v.set.size,day:Math.round(v.days.reduce((a,b)=>a+b,0)/v.days.length)}));
 }
 function guideView(){
@@ -599,21 +602,26 @@ function instFromIssuer(s){
 
 /* ---------- add with dedup ---------- */
 function addTx(list,src){
-  const k1=t=>t.date+"|"+t.amount+"|"+(t.inst||"")+"|"+norm(t.merchant);
+  // key: 원본 가맹점명 (취소 행은 표시용 이름에 "(취소)"가 붙으므로 원문을 따로 보관)
+  const k1=t=>t.date+"|"+t.amount+"|"+(t.inst||"")+"|"+norm(t.key||t.merchant);
   const k2=t=>t.date+"|"+t.amount+"|"+(t.inst||"");
   const exact={},loose={},seen={};
   S.tx.forEach(t=>{exact[k1(t)]=(exact[k1(t)]||0)+1;(loose[k2(t)]=loose[k2(t)]||[]).push(t.src)});
   let added=0,dup=0,offset=0;
-  list.forEach(t=>{
-    if(t.cancel){
-      const orig=S.tx.find(o=>o.amount===-t.amount&&!o.canceled&&(!t.inst||o.inst===t.inst)&&(norm(o.merchant)===norm(t.merchant)||o.date===t.date));
-      if(orig){orig.canceled=true;S.tx.push({id:S.seq++,date:t.date,amount:t.amount,merchant:orig.merchant+" (취소)",inst:orig.inst,src,category:orig.category});offset++;return}
-      t.merchant+=" (취소·원거래 없음)";
-    }
+  // 원거래를 먼저 넣고 취소를 나중에 처리 → 같은 파일 안에서 순서와 관계없이 상계
+  list.filter(t=>!t.cancel).concat(list.filter(t=>t.cancel)).forEach(t=>{
     const a=k1(t);seen[a]=(seen[a]||0)+1;
     if(seen[a]<=(exact[a]||0)){dup++;return}
     const l=loose[k2(t)];const idx=l?l.findIndex(s=>s!==src):-1;
     if(idx>=0){l.splice(idx,1);dup++;return}
+    if(t.cancel){
+      const same=o=>norm(o.merchant)===norm(t.merchant);
+      const c=S.tx.filter(o=>o.amount===-t.amount&&!o.canceled&&!o.refund&&(!t.inst||o.inst===t.inst));
+      const orig=c.find(o=>o.date===t.date&&same(o))||c.filter(o=>same(o)&&o.date<=t.date).sort(byDate)[0]||c.find(o=>o.date===t.date);
+      const row={id:S.seq++,date:t.date,amount:t.amount,key:t.merchant,inst:t.inst||(orig&&orig.inst),src,refund:true,
+        merchant:orig?orig.merchant+" (취소)":t.merchant+" (취소·원거래 없음)",category:orig?orig.category:classify(t.merchant,t.inst)};
+      if(orig){orig.canceled=true;row.cancelOf=orig.id;offset++}else added++;
+      S.tx.push(row);return}
     S.tx.push({id:S.seq++,date:t.date,amount:t.amount,merchant:t.merchant,inst:t.inst,src,category:t.category||classify(t.merchant,t.inst)});added++;
   });
   const touched=new Set(list.map(t=>t.inst));S.inst.forEach(i=>{if(touched.has(i.id))i.last=new Date().toISOString()});
@@ -659,16 +667,16 @@ function mapRows(rows,inst){
   const ai=(oi>=0&&ii>=0)?-1:find(H.amt);const ci=find(H.cancel);
   const memoI=h.findIndex((x,i)=>i!==mi&&/^적요$|^거래구분$|^구분$/.test(x));
   if(mi<0)return {err:"가맹점(내용) 열을 찾지 못했습니다. 제목 줄: "+h.filter(Boolean).join(", ")};
-  const out=[];let skipped=0;
+  const out=[];let skipped=0;const isCard=(S.inst.find(i=>i.id===inst)||{}).type==="card";
   rows.slice(hi+1).forEach(r=>{
     const date=parseDate(r[di]);const merchant=String(r[mi]||"").trim();
     if(!date||!merchant||/^(합계|소계|총계)/.test(merchant)){if(r.some(c=>String(c).trim()))skipped++;return}
-    let amount;
-    if(ai>=0){const v=numOf(r[ai]);amount=-v;if(ci>=0&&/취소/.test(String(r[ci])))amount=Math.abs(v)}
+    let amount,cancel=false;
+    if(ai>=0){const v=numOf(r[ai]);cancel=(ci>=0&&/취소/.test(String(r[ci])))||(v<0&&isCard);amount=cancel?Math.abs(v):-v}
     else{const vi=numOf(r[ii]),vo=numOf(r[oi]);amount=vi>0?vi:-vo}
     if(!amount){skipped++;return}
     const memo=memoI>=0?String(r[memoI]||"").trim():"";const mc=memo?classify(memo,inst):"미분류";
-    out.push({date,merchant,amount,inst,category:mc!=="미분류"?mc:null});
+    out.push({date,merchant,amount,inst,cancel,category:mc!=="미분류"?mc:null});
   });
   return {rows:out,skipped,header:h.filter(Boolean)};
 }
@@ -737,7 +745,7 @@ function bind(){
       try{const p=mapRows(await fileRows(f),$("#fileInst").value);
         if(p.err){out.innerHTML=`<p class="note alert">${esc(p.err)}</p>`;return}
         const r=addTx(p.rows,"csv");
-        out.innerHTML=`<p class="note">${esc(f.name)} · ${p.rows.length}건 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외${p.skipped?` · 건너뜀 ${p.skipped}줄`:""}<br><span class="cap">인식한 열: ${esc(p.header.join(", "))}</span></p>`;
+        out.innerHTML=`<p class="note">${esc(f.name)} · ${p.rows.length}건 읽음 · <b>${r.added}건 추가</b> · 중복 ${r.dup}건 제외${r.offset?` · 취소 상계 ${r.offset}건`:""}${p.skipped?` · 건너뜀 ${p.skipped}줄`:""}<br><span class="cap">인식한 열: ${esc(p.header.join(", "))}</span></p>`;
       }catch(err){out.innerHTML=`<p class="note alert">${esc(err.message||"파일을 읽지 못했습니다")}</p>`}
       e.target.value=""};
   }
