@@ -182,8 +182,9 @@ h2.title{font-size:22px;letter-spacing:-.02em;margin:0 0 10px;text-wrap:balance;
 (function(){
 "use strict";
 /* 카테고리: '어디서 줄일 수 있나'를 보기 위해 식비·교통을 쪼갬 (장보기/외식·배달/편의점, 대중교통/택시/자동차) */
-const CATS=["장보기","외식·배달","카페·간식","편의점","대중교통","택시","자동차·주유","쇼핑","가전·가구","생활","주거·관리비","보험·공제","통신","세금·공과금","구독·렌탈","의료","교육·도서","문화·여가","경조사·선물","대출상환","저축·투자","기타","이체","수입","미분류"];
-const NON_SPEND=new Set(["이체","수입","저축·투자"]);
+const CATS=["장보기","외식·배달","카페·간식","편의점","대중교통","택시","자동차·주유","쇼핑","가전·가구","생활","주거·관리비","보험·공제","통신","세금·공과금","구독·렌탈","의료","교육·도서","문화·여가","경조사·선물","가족 생활비","대출상환","저축·투자","회사 대납","기타","이체","수입","미분류"];
+// 회사 대납: 회사·부서 비용을 내 카드로 먼저 내고 정산받는 돈 → 우리 집 지출·수입 아님
+const NON_SPEND=new Set(["이체","수입","저축·투자","회사 대납"]);
 const FIXED_CATS=new Set(["주거·관리비","보험·공제","통신","세금·공과금","구독·렌탈","대출상환","보험","구독","대출이자"]);
 const CUT_CATS=["외식·배달","카페·간식","편의점","택시","쇼핑","가전·가구","문화·여가","자동차·주유","장보기","생활"];
 const METHOD={sms:{t:"문자"},capture:{t:"캡처"},csv:{t:"엑셀·CSV"},pdf:{t:"PDF"},api:{t:"자동 수집"},mydata:{t:"마이데이터"},email:{t:"이메일"},manual:{t:"수기"}};
@@ -246,8 +247,10 @@ function classify(merchant,inst){
   for(const r of S.rules){ if(m.includes(r.pattern)) return r.category; }
   const it=S.inst.find(i=>i.id===inst);
   if(it&&it.type==="bank"&&CARD_BILL.test(m)) return "이체";
-  // 본인·가족 이름으로 오가는 돈은 지출이 아닌 이체 (연동 탭 설정)
-  if(it&&it.type==="bank"&&(S.self||[]).some(n=>n&&m.replace(/\s/g,"").startsWith(n))) return "이체";
+  // 연동 탭 설정: 생활비를 보내는 가족 → 지출(가족 생활비), 본인 다른 계좌 → 이체
+  const who=m.replace(/\s/g,"");
+  if(it&&it.type==="bank"&&(S.family||[]).some(n=>n&&who.startsWith(n))) return "가족 생활비";
+  if(it&&it.type==="bank"&&(S.self||[]).some(n=>n&&who.startsWith(n))) return "이체";
   for(const [cat,list] of Object.entries(KEYWORDS)){ if(list.some(k=>m.toUpperCase().includes(k.trim().toUpperCase()))) return cat; }
   return "미분류";
 }
@@ -299,8 +302,8 @@ function seed(){
 }
 function fresh(){
   const budget=S?S.budget.total:2000000;
-  const self=S&&!S.sample?S.self:[];
-  S={sample:false,inst:MY_INST.map(i=>({...i,status:"ok",last:null})),accounts:[],tx:[],rules:[],recurring:[],budget:{total:budget,cats:{}},seq:1,month:ym(today),self:self||[],kwVer:KW_VER};
+  const keep=S&&!S.sample?{self:S.self||[],family:S.family||[]}:{self:[],family:[]};
+  S={sample:false,inst:MY_INST.map(i=>({...i,status:"ok",last:null})),accounts:[],tx:[],rules:[],recurring:[],budget:{total:budget,cats:{}},seq:1,month:ym(today),...keep,kwVer:KW_VER};
   save();
 }
 
@@ -439,8 +442,10 @@ function linkView(){
       return `<div class="inst"><div style="min-width:0"><b>${esc(i.name)}</b><div class="cap">${i.type==="card"?"승인 문자 공유 + 월 1회 엑셀":"월 1회 엑셀 + 입출금 문자"}</div></div>
       <div class="r cap" style="text-align:right;display:block">${n.length}건<br>${last?`마지막 ${last.slice(5).replace("-",".")}`:"아직 없음"}</div></div>`}).join(""))}).join("")}
   ${sec("설정","",`<form id="budgetForm" class="form"><div class="field full"><label for="budgetIn">월 예산 (원)</label><input id="budgetIn" type="number" inputmode="numeric" value="${S.budget.total}" min="0"></div><button class="btn block full">예산 저장</button></form>
-    <form id="selfForm" class="form" style="margin-top:18px"><div class="field full"><label for="selfIn">본인·가족 이름 (쉼표로 구분)</label><input id="selfIn" value="${esc((S.self||[]).join(", "))}" placeholder="예: 홍길동, 김영희"></div>
-    <p class="cap full" style="margin:0">은행 내역에서 이 이름으로 오간 돈은 지출·수입이 아닌 <b>이체</b>로 봅니다 (내 다른 계좌, 배우자 생활비 계좌 등).</p><button class="btn block full">이름 저장 · 다시 분류</button></form>`)}
+    <form id="selfForm" class="form" style="margin-top:18px"><div class="field full"><label for="selfIn">본인 이름 (내 다른 계좌로 옮긴 돈)</label><input id="selfIn" value="${esc((S.self||[]).join(", "))}" placeholder="예: 홍길동"></div>
+    <p class="cap full" style="margin:0">이 이름으로 오간 돈은 지출·수입이 아닌 <b>이체</b>로 봅니다.</p>
+    <div class="field full"><label for="famIn">생활비를 보내는 가족 이름 (쉼표로 구분)</label><input id="famIn" value="${esc((S.family||[]).join(", "))}" placeholder="예: 김영희"></div>
+    <p class="cap full" style="margin:0">이 이름으로 보낸 돈은 <b>가족 생활비</b>로 지출에 넣습니다. 가족 카드 내역을 따로 올리지 않을 때 씁니다.</p><button class="btn block full">이름 저장 · 다시 분류</button></form>`)}
   ${sec("백업","",`<p class="cap" style="margin:0 0 12px">데이터는 이 브라우저에만 있습니다. 브라우저 데이터를 지우거나 휴대폰을 바꾸면 사라지니 매주 한 번 내보내서 구글 드라이브 등에 보관하세요.</p>
     <div class="btns" style="margin-top:0"><button class="btn solid" id="exportBtn">백업 내보내기</button><label class="btn" for="importFile" style="cursor:pointer">백업 불러오기</label></div>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
@@ -893,8 +898,9 @@ function bind(){
   }
   const bf=$("#budgetForm");if(bf)bf.onsubmit=e=>{e.preventDefault();const v=Math.max(0,Math.round(+$("#budgetIn").value||0));S.budget.total=v||S.budget.total;save();toast("월 예산을 "+won(S.budget.total)+"으로 저장했습니다")};
   document.querySelectorAll("[data-ana]").forEach(b=>b.onclick=()=>{S.anaN=+b.dataset.ana;save();render()});
-  const sf=$("#selfForm");if(sf)sf.onsubmit=e=>{e.preventDefault();S.self=$("#selfIn").value.split(/[,，]/).map(s=>s.replace(/\s/g,"")).filter(Boolean);
-    const n=reclassify(t=>t.category==="미분류"||t.category==="이체");save();toast(`이름 ${S.self.length}개 저장 · ${n}건 다시 분류`);render()};
+  const sf=$("#selfForm");if(sf)sf.onsubmit=e=>{e.preventDefault();const names=v=>v.split(/[,，]/).map(s=>s.replace(/\s/g,"")).filter(Boolean);
+    S.self=names($("#selfIn").value);S.family=names($("#famIn").value);
+    const n=reclassify(t=>["미분류","이체","가족 생활비"].includes(t.category));save();toast(`이름 ${S.self.length+S.family.length}개 저장 · ${n}건 다시 분류`);render()};
   const eb=$("#exportBtn");if(eb){eb.onclick=exportBackup;$("#importFile").onchange=e=>{const f=e.target.files[0];if(f)importBackup(f);e.target.value=""}}
 }
 $("#tabs").onclick=e=>{const b=e.target.closest("button");if(!b)return;tab=b.dataset.tab;if(tab!=="import")pendingSms=null;render()};
