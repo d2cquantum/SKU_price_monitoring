@@ -352,6 +352,16 @@
   .inline { display:flex; gap:8px; align-items:center; }
   .inline select { flex:1; min-width:0; }
   .calc { font-size:12px; color:var(--accent); font-weight:700; margin:4px 0 0; }
+  /* 가족 정원 */
+  .member { display:flex; align-items:center; gap:10px; padding:8px 0; }
+  .member + .member { border-top:1px solid var(--line); }
+  .avatar { width:34px; height:34px; border-radius:50%; background:var(--c4); color:var(--c6); display:inline-flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; flex:none; }
+  .code { font-size:28px; font-weight:800; letter-spacing:.18em; font-variant-numeric:tabular-nums; text-align:center; background:var(--surface-2); border-radius:var(--r-md); padding:10px; margin:6px 0 10px; }
+  .gbtn { display:inline-flex; align-items:center; justify-content:center; gap:10px; width:100%; border:1px solid var(--line); background:#fff; color:#1f1f1f; border-radius:999px; padding:12px 16px; font-weight:700; cursor:pointer; }
+  .gbtn svg { width:18px; height:18px; }
+  .famline { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .famline i { width:8px; height:8px; border-radius:50%; background:var(--c5); display:inline-block; }
+  .famline i.off { background:var(--sun); }
   .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 </style>
 </head>
@@ -363,6 +373,7 @@
 <input type="file" id="filePhoto" accept="image/*" class="sr" tabindex="-1">
 <input type="file" id="fileBackup" accept="application/json,.json" class="sr" tabindex="-1">
 
+<script src="firebase-config.js"></script>
 <script>
 (function () {
   'use strict';
@@ -405,6 +416,8 @@
     thermo: '<path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 10v6.5"/>',
     pin: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
     smile: '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 14a4 4 0 0 0 7 0M9.2 9.5h.01M14.8 9.5h.01"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 19.5a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   };
   const ico = name => '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
 
@@ -472,7 +485,7 @@
 
   /* ───────── 상태 ───────── */
   const defaults = () => ({
-    v: 2, seq: 1, sample: false, plants: [], groups: [], logs: [], lastBackup: null,
+    v: 2, seq: 1, sample: false, plants: [], groups: [], logs: [], lastBackup: null, family: null,
     settings: { winter: true, winterFactor: 1.5, recheck: 2, fertGrowOnly: true, theme: 'auto' },
   });
   let S = load();
@@ -491,12 +504,16 @@
     } catch (e) { console.warn('load failed', e); }
     return defaults();
   }
-  function save() {
+  function saveLocal() {
     try { localStorage.setItem(KEY, JSON.stringify(S)); }
     catch (e) { toast('저장 공간이 부족해요. 설정에서 백업 후 정리해 주세요.'); }
-    updateBadge();
   }
-  const nid = p => p + (S.seq++).toString(36) + Date.now().toString(36).slice(-4);
+  function save() {
+    saveLocal();
+    updateBadge();
+    pushDiff();   // 가족 정원이면 바뀐 문서만 Firestore로
+  }
+  const nid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const plantById = id => S.plants.find(p => p.id === id);
 
   /* ───────── 사진 저장소 (IndexedDB) ───────── */
@@ -520,11 +537,12 @@
       tx.onerror = () => rej(tx.error);
     });
   }
-  const photoPut = (id, data) => { PH.set(id, data); return idb('readwrite', s => s.put(data, id)); };
-  const photoDel = id => { PH.delete(id); return idb('readwrite', s => s.delete(id)).catch(() => {}); };
+  const photoPut = (id, data) => { PH.set(id, data); famPhotoPut(id, data); return idb('readwrite', s => s.put(data, id)); };
+  const photoDel = id => { PH.delete(id); famPhotoDel(id); return idb('readwrite', s => s.delete(id)).catch(() => {}); };
   async function photoGet(id) {
     if (PH.has(id)) return PH.get(id);
-    const v = await idb('readonly', s => s.get(id)).catch(() => null);
+    let v = await idb('readonly', s => s.get(id)).catch(() => null);
+    if (!v) { v = await famPhotoGet(id); if (v) idb('readwrite', s => s.put(v, id)).catch(() => {}); }
     if (v) PH.set(id, v);
     return v;
   }
@@ -627,6 +645,12 @@
   /* ───────── 기록 추가·삭제 ───────── */
   function addLog(plantId, type, extra = {}) {
     const l = Object.assign({ id: nid('l'), plantId, type, date: today(), note: '', at: Date.now() }, extra);
+    if (type === 'water' && plantId) {
+      l.id = 'w_' + plantId + '_' + l.date;   // 같은 식물·같은 날 물주기는 한 건 (가족이 동시에 눌러도)
+      const ex = S.logs.find(x => x.id === l.id);
+      if (ex) return ex;
+    }
+    if (S.family && fam.user) l.by = fam.user.uid;
     S.logs.push(l);
     return l;
   }
@@ -705,20 +729,21 @@
     const plants = active();
     const n = dueCount();
     const right = '<button type="button" class="round" data-act="tab" data-id="calendar" aria-label="양육 캘린더">' + ico('calendar') + (n ? '<span class="dot">' + n + '</span>' : '') + '</button>';
-    let h = header('병아리 정원', fmtDate(t), { right });
+    let h = header('병아리 정원', fmtDate(t) + (S.family ? ' · ' + (S.family.name || '가족 정원') : ''), { right });
     const hr = new Date().getHours();
+    const who = famOn() ? memberName(fam.user.uid) + '님' : '식집사님';
     const hello = hr < 5 ? '늦은 밤이에요' : hr < 11 ? '좋은 아침이에요' : hr < 17 ? '좋은 오후예요' : '좋은 저녁이에요';
 
     if (!plants.length) {
-      h += '<section class="deep hero"><div class="txt"><h2>' + hello + ', 식집사님!</h2><p>첫 식물을 등록하면 물 줄 날을 챙겨 드릴게요.</p>' +
+      h += '<section class="deep hero"><div class="txt"><h2>' + hello + ', ' + esc(who) + '!</h2><p>첫 식물을 등록하면 물 줄 날을 챙겨 드릴게요.</p>' +
         '<button type="button" class="cta" data-act="new">' + ico('plus') + '첫 식물 등록</button></div><div class="art">' + ART_PLANT + '</div></section>';
       h += '<div class="card"><div class="empty"><div class="art">' + ART_CHICK + '</div><b>아직 정원이 비어 있어요</b><p class="small">어떻게 쓰는지 먼저 보고 싶다면 예시 식물로 둘러보세요.</p>' +
-        '<button type="button" class="btn" data-act="sample">예시로 둘러보기</button></div></div>';
+        (S.family ? '' : '<button type="button" class="btn" data-act="sample">예시로 둘러보기</button>') + '</div></div>';
       return h + tipCard();
     }
     const wd = waterDue(), fd = fertDue(), done = doneToday();
     const soon7 = plants.filter(p => { const l = waterInfo(p).left; return l > 0 && l <= 7; }).length;
-    h += '<section class="deep hero"><div class="txt"><h2>' + hello + ', 식집사님!</h2><p>' +
+    h += '<section class="deep hero"><div class="txt"><h2>' + hello + ', ' + esc(who) + '!</h2><p>' +
       (n ? '오늘 돌볼 식물이 <b>' + n + '건</b>' + (soon7 ? ', 이번 주에 <b>' + soon7 + '건</b> 더 있어요.' : ' 있어요.') : '오늘은 쉬어도 돼요.' + (soon7 ? ' 이번 주에 <b>' + soon7 + '건</b>이 기다려요.' : '')) + '</p>' +
       '<button type="button" class="cta" data-act="new">' + ico('plus') + '식물 등록</button></div><div class="art">' + ART_PLANT + '</div></section>';
 
@@ -876,7 +901,7 @@
     const p = plantById(l.plantId);
     const who = hidePlant ? '' : p ? '<a href="#" data-act="open" data-id="' + esc(l.plantId) + '">' + esc(p.name) + '</a> · ' : (l.plantId === '' ? '우리집 · ' : '');
     return '<div class="item">' + (l.type === 'sticker' ? '<span class="em">' + esc(l.sticker || '🌱') + '</span>' : '<span class="tile sm">' + ico(tp.ic) + '</span>') + '<div class="body">' +
-      '<div class="t">' + who + tp.label + (l.count ? ' ' + l.count + '장' : '') + '</div>' +
+      '<div class="t">' + who + tp.label + (l.count ? ' ' + l.count + '장' : '') + (l.by && S.family ? ' <span class="small muted" style="font-weight:500">· ' + esc(memberName(l.by)) + '</span>' : '') + '</div>' +
       (hideDate ? '' : '<div class="d">' + fmtDate(l.date) + '</div>') +
       (l.note ? '<p>' + esc(l.note) + '</p>' : '') +
       (l.photo ? '<img alt="기록 사진" data-ph="' + esc(l.photo) + '" data-act="view" data-ph-id="' + esc(l.photo) + '" data-cap="' + esc(fmtDate(l.date)) + '">' : '') +
@@ -1056,7 +1081,8 @@
     h += '<section class="card"><div class="card-h"><h2>물주기<small>' + (future ? '앞으로 물 줄 예정이에요' : '물 준 식물의 버튼을 누르면 바로 기록돼요') + '</small></h2></div>';
     h += plants.length ? plants.map(p => {
       const k = kinds[p.id], w = waterInfo(p);
-      const st = k === 'late' ? fmtShort(w.due) + '에 줄 차례였어요 · ' + diffDays(w.due, t) + '일 지남' : k ? KIND_TEXT[k] : '다음 물주기 ' + fmtShort(w.due);
+      const wl = k === 'done' && S.family ? S.logs.find(l => l.plantId === p.id && l.type === 'water' && l.date === d) : null;
+      const st = k === 'late' ? fmtShort(w.due) + '에 줄 차례였어요 · ' + diffDays(w.due, t) + '일 지남' : k ? KIND_TEXT[k] + (wl && wl.by ? ' · ' + memberName(wl.by) : '') : '다음 물주기 ' + fmtShort(w.due);
       const btn = future ? (k ? '<span class="due ' + (k === 'proj' ? 'later' : 'soon') + '">예정</span>' : '')
         : '<button type="button" class="wbtn ' + ({ done: 'on', late: 'late', due: 'due', plan: 'due' }[k] || '') + '" data-act="nk" data-id="' + p.id + '" data-d="' + d + '" aria-pressed="' + (k === 'done') + '">' + ico(k === 'done' ? 'check' : 'drop') + (k === 'done' ? '물 줬어요' : '물 주기') + '</button>';
       return '<div class="pl">' + thumb(p) + '<div class="body" data-act="open" data-id="' + p.id + '"><div class="title">' + esc(p.name) + '</div><div class="meta' + (k === 'late' ? ' late' : '') + '">' + esc(st) + '</div></div>' + btn + '</div>';
@@ -1179,8 +1205,11 @@
   /* 설정 */
   function settingsView() {
     const st = S.settings;
-    let h = header('설정', '백업과 계산 방식');
-    h += '<section class="deep hero" style="min-height:0"><div class="txt"><h2>내 정원은 이 휴대폰에만</h2><p>모든 기록과 사진은 이 브라우저 안에만 저장돼요. 서버로 보내지 않아요. 휴대폰을 바꾸기 전에 백업 파일을 만들어 두세요.</p>' +
+    let h = header('설정', '가족 정원·백업·계산 방식');
+    h += familyCard();
+    h += '<section class="deep hero" style="min-height:0"><div class="txt">' + (S.family
+      ? '<h2>가족 정원은 클라우드에</h2><p>식물·기록·사진이 가족 정원(Firebase)에 저장되고 가족 모두의 휴대폰에 맞춰져요. 그래도 가끔 백업 파일을 만들어 두면 안심이에요.</p>'
+      : '<h2>내 정원은 이 휴대폰에만</h2><p>모든 기록과 사진은 이 브라우저 안에만 저장돼요. 서버로 보내지 않아요. 휴대폰을 바꾸기 전에 백업 파일을 만들어 두세요.</p>') +
       '<p class="small" style="margin:0">마지막 백업 <b>' + (S.lastBackup ? fmtDate(S.lastBackup.slice(0, 10)) : '없음') + '</b> · <span id="usage">용량 계산 중…</span></p></div></section>';
     h += '<div class="btns" style="margin-bottom:14px"><button type="button" class="btn primary" data-act="export">' + ico('down') + '백업 파일 만들기</button><button type="button" class="btn" data-act="import">' + ico('up') + '백업 불러오기</button></div>';
     h += '<section class="card"><div class="card-h"><h2>물주기 계산</h2></div><form id="setForm">' +
@@ -1191,7 +1220,7 @@
       '</form></section>';
     h += '<section class="card"><div class="card-h"><h2>화면</h2></div><div class="chips" role="group" aria-label="테마">' + [['auto', '기기 설정 따르기'], ['light', '밝게'], ['dark', '어둡게']].map(([v, l]) => '<button type="button" class="chip' + (st.theme === v ? ' on' : '') + '" data-act="theme" data-v="' + v + '">' + l + '</button>').join('') + '</div></section>';
     h += '<section class="card"><div class="card-h"><h2>앱으로 설치</h2></div><p class="small muted" style="margin:0">크롬 메뉴(⋮) → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누르면 아이콘으로 바로 열 수 있고 인터넷 없이도 쓸 수 있어요. 아이폰은 사파리 공유 버튼 → 홈 화면에 추가.<br>알림은 앱을 열었을 때 "오늘" 화면과 아이콘 숫자 배지로 보여 드려요.</p></section>';
-    h += '<section class="card"><div class="card-h"><h2>데이터</h2></div><div class="btns">' + (S.plants.length ? '' : '<button type="button" class="btn" data-act="sample">예시 식물 넣기</button>') +
+    if (!S.family) h += '<section class="card"><div class="card-h"><h2>데이터</h2></div><div class="btns">' + (S.plants.length ? '' : '<button type="button" class="btn" data-act="sample">예시 식물 넣기</button>') +
       '<button type="button" class="btn danger" data-act="reset">' + ico('trash') + '모든 데이터 지우기</button></div></section>';
     h += '<p class="hint" style="text-align:center">병아리 정원 · 데이터 버전 ' + S.v + '</p>';
     setTimeout(showUsage, 0);
@@ -1462,9 +1491,20 @@
         navStack.length = 0; go({ plant: null, edit: null, tab: 'plants' }); toast('삭제했어요'); break;
       }
       case 'theme': S.settings.theme = el.dataset.v; save(); render(); break;
+      case 'signIn': signIn(); break;
+      case 'signOut':
+        if (!confirm(S.family ? '로그아웃할까요? 이 휴대폰은 가족 정원 대신 원래 데이터로 돌아가요. 가족 정원의 기록은 그대로 남아요.' : '로그아웃할까요?')) break;
+        signOut(); break;
+      case 'createFamily': createFamily(($('#famName') || {}).value); break;
+      case 'joinFamily': joinFamily(($('#joinCode') || {}).value); break;
+      case 'invite': makeInvite(); break;
+      case 'shareInvite': shareInvite(); break;
+      case 'leaveFamily':
+        if (!confirm('가족 정원에서 나갈까요? 함께 쓰던 기록은 가족 정원에 남고, 이 휴대폰은 원래 데이터로 돌아가요.')) break;
+        leaveFamily(); break;
       case 'export': exportBackup(); break;
       case 'import': $('#fileBackup').value = ''; $('#fileBackup').click(); break;
-      case 'sample': await seed(); save(); go({ tab: 'today', plant: null, edit: null }); toast('예시 식물 4개를 넣었어요'); break;
+      case 'sample': if (S.family) break; await seed(); save(); go({ tab: 'today', plant: null, edit: null }); toast('예시 식물 4개를 넣었어요'); break;
       case 'clearSample':
         if (!confirm('예시 식물과 기록을 지우고 빈 정원으로 시작할까요?')) break;
         await wipe(); go({ tab: 'today' }); break;
@@ -1514,7 +1554,7 @@
       if (S.groups.some(x => x.name === name && x.id !== gid)) { toast('같은 이름의 그룹이 있어요'); return; }
       if (gid) S.groups.find(x => x.id === gid).name = name;
       else {
-        const g = { id: nid('g'), name }; S.groups.push(g);
+        const g = { id: nid('g'), name, at: Date.now() }; S.groups.push(g);
         if (ui.edit && draft) { syncDraft(); draft.values.group = g.id; }
         else if (ui.tab === 'plants' && !ui.plant) ui.group = g.id;
       }
@@ -1572,10 +1612,325 @@
     toast(s.type === 'sticker' ? extra.sticker + ' 스티커를 붙였어요' : LOG_TYPES[s.type].label + ' 기록했어요');
   }
 
+  /* ───────── 가족 정원 (Firebase) ───────── */
+  // firebase-config.js에 설정이 있을 때만 gstatic에서 SDK를 불러온다. 없으면 지금처럼 이 기기에만 저장.
+  // 데이터: households/{hid} {name, owner, members[], memberInfo{uid:{name}}}
+  //         households/{hid}/plants·groups·logs/{id} = S의 각 항목 그대로, photos/{id} = {data: JPEG dataURL}
+  //         invites/{code} {hid, by, expires}, users/{uid} {household}
+  // 동기화: save()마다 S와 마지막으로 맞춘 상태(fam.synced)를 비교해 바뀐 문서만 쓰고, onSnapshot으로 받은 내용으로 S를 바꾼다.
+  const FB_VER = '10.12.2';
+  const COLLS = ['plants', 'groups', 'logs'];
+  const STASH = 'cg-local-stash';   // 가족 정원에 들어가기 전 이 기기의 데이터
+  const fam = { cfg: window.CG_FIREBASE || null, fb: null, user: undefined, hh: null, hid: null, ready: false, unsub: [], synced: {}, status: '', invite: null, busy: false };
+  let pendingJoin = null;
+  const stable = v => Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
+    : v && typeof v === 'object' ? '{' + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}'
+    : JSON.stringify(v === undefined ? null : v);
+  const famOn = () => !!(S.family && fam.user && fam.user.uid === S.family.uid);
+  const isEmu = () => !!(fam.cfg && fam.cfg.emulator && ['localhost', '127.0.0.1'].includes(location.hostname));
+  function memberName(uid) {
+    const m = fam.hh && fam.hh.memberInfo && fam.hh.memberInfo[uid];
+    if (m && m.name) return m.name;
+    if (fam.user && fam.user.uid === uid) return myName();
+    return '가족';
+  }
+  function myName() { const u = fam.user; return (u && (u.displayName || (u.email || '').split('@')[0])) || '나'; }
+  const me = () => ({ name: myName() });
+  function rerender() { if (ui.edit) renderTabs(); else render(); }
+  function famErr(e) {
+    console.warn('family', e);
+    if (e && e.code === 'permission-denied' && S.family) { toast('가족 정원에 접근할 수 없어요. 다시 초대를 받아 주세요.'); exitFamilyLocal(); }
+    else if (e) { fam.status = '오류: ' + (e.code || e.message); rerender(); }
+  }
+
+  async function fbLoad() {
+    if (fam.fb) return fam.fb;
+    if (!fam.cfg) throw new Error('Firebase 설정이 없어요');
+    const base = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
+    const [A, Au, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+    const app = A.initializeApp(fam.cfg);
+    const auth = Au.getAuth(app);
+    let db;
+    try { db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
+    catch (e) { db = F.getFirestore(app); }
+    if (isEmu()) { Au.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true }); F.connectFirestoreEmulator(db, '127.0.0.1', 8080); }
+    fam.fb = { A, Au, F, app, auth, db };
+    Au.getRedirectResult(auth).catch(e => console.warn('redirect', e));
+    Au.onAuthStateChanged(auth, u => { fam.user = u || null; onAuth(); });
+    return fam.fb;
+  }
+  function onAuth() {
+    const u = fam.user;
+    if (u && S.family && S.family.uid === u.uid) subscribe(S.family.hid);
+    else if (u && S.family) exitFamilyLocal();          // 다른 계정으로 로그인함
+    else if (u) checkMembership();
+    else if (S.family) { stopSync(); fam.status = '로그아웃됨'; }
+    rerender();
+  }
+  // 다른 휴대폰에서 이미 가족 정원에 들어가 있으면 이어서 쓰기
+  async function checkMembership() {
+    const { F, db } = fam.fb, u = fam.user;
+    try {
+      const snap = await F.getDoc(F.doc(db, 'users', u.uid));
+      const hid = snap.exists() && snap.data().household;
+      if (hid && !S.family) {
+        const h = await F.getDoc(F.doc(db, 'households', hid)).catch(() => null);
+        if (h && h.exists()) { await enterFamily(hid); toast('가족 정원 "' + (h.data().name || '') + '"에 다시 연결했어요'); return; }
+      }
+    } catch (e) { console.warn('membership', e); }
+    if (pendingJoin) joinFamily(pendingJoin);
+  }
+  async function signIn() {
+    let fb;
+    try { fb = await fbLoad(); } catch (e) { toast('로그인 준비에 실패했어요. 인터넷 연결을 확인해 주세요.'); return; }
+    const { Au, auth } = fb;
+    const prov = new Au.GoogleAuthProvider();
+    prov.setCustomParameters({ prompt: 'select_account' });
+    try { await Au.signInWithPopup(auth, prov); }
+    catch (e) {
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') return Au.signInWithRedirect(auth, prov);
+      if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast('로그인하지 못했어요 (' + (e.code || e.message) + ')');
+    }
+  }
+  async function signOut() {
+    if (!fam.fb) return;
+    if (S.family) exitFamilyLocal();
+    await fam.fb.Au.signOut(fam.fb.auth);
+    toast('로그아웃했어요');
+  }
+  async function createFamily(name) {
+    if (fam.busy || !fam.user) return;
+    fam.busy = true; render();
+    try {
+      const { F, db } = await fbLoad(), u = fam.user;
+      const ref = F.doc(F.collection(db, 'households'));
+      await F.setDoc(ref, { name: (name || '').trim() || '우리집 정원', owner: u.uid, members: [u.uid], memberInfo: { [u.uid]: me() }, createdAt: Date.now() });
+      await F.setDoc(F.doc(db, 'users', u.uid), { household: ref.id }, { merge: true });
+      await enterFamily(ref.id, true);
+      toast('가족 정원을 만들었어요. 이제 가족을 초대해 보세요!');
+    } catch (e) { toast('가족 정원을 만들지 못했어요 (' + (e.code || e.message) + ')'); }
+    fam.busy = false; render();
+  }
+  // 가족 정원으로 전환. merge: 이 기기의 식물·기록을 가족 정원에 올릴지 (undefined면 물어봄)
+  // merge: true = 바로 올림, undefined = 서버 내용을 받은 뒤 이 휴대폰에만 있는 게 있으면 물어봄
+  async function enterFamily(hid, merge) {
+    const hasLocal = !S.sample && (S.plants.length || S.logs.length);
+    try { localStorage.setItem(STASH, JSON.stringify(S)); } catch (e) {}
+    const upload = hasLocal && merge !== false ? { plants: S.plants, groups: S.groups, logs: S.logs, ask: merge === undefined } : null;
+    S.plants = []; S.groups = []; S.logs = []; S.sample = false;
+    S.family = { hid, uid: fam.user.uid, name: '' };
+    saveLocal();
+    navStack.length = 0; Object.assign(ui, { plant: null, edit: null, day: null, group: '' });
+    subscribe(hid, upload);
+  }
+  function subscribe(hid, upload) {
+    if (fam.hid === hid && fam.unsub.length) return;
+    stopSync();
+    const { F, db } = fam.fb, seen = new Set();
+    fam.hid = hid; fam.status = '불러오는 중…';
+    fam.unsub.push(F.onSnapshot(F.doc(db, 'households', hid), d => {
+      if (!d.exists()) { toast('가족 정원을 찾을 수 없어요'); exitFamilyLocal(); return; }
+      fam.hh = d.data();
+      if (!(fam.hh.members || []).includes(fam.user.uid)) { toast('가족 정원에서 빠졌어요'); exitFamilyLocal(); return; }
+      if (S.family) { S.family.name = fam.hh.name; saveLocal(); }
+      rerender();
+    }, famErr));
+    COLLS.forEach(c => fam.unsub.push(F.onSnapshot(F.collection(db, 'households', hid, c), snap => {
+      if (!S.family) return;
+      const list = snap.docs.map(d => Object.assign({}, d.data(), { id: d.id }));
+      fam.synced[c] = new Map(list.map(x => [x.id, stable(x)]));
+      S[c] = sortColl(c, list);
+      if (fam.ready && c === 'logs') notifyRemote(snap);
+      seen.add(c);
+      fam.status = snap.metadata.fromCache ? '오프라인 · 연결되면 자동으로 맞춰요' : '동기화됨';
+      if (!fam.ready && seen.size === COLLS.length) {
+        fam.ready = true;
+        if (upload) { mergeUpload(upload); upload = null; }
+      }
+      saveLocal(); updateBadge();
+      if (fam.ready) rerender();
+    }, famErr)));
+  }
+  function sortColl(c, list) {
+    if (c === 'plants') return list.sort((a, b) => (a.created || '').localeCompare(b.created || '') || (a.name || '').localeCompare(b.name || '', 'ko'));
+    if (c === 'groups') return list.sort((a, b) => (a.at || 0) - (b.at || 0) || (a.name || '').localeCompare(b.name || '', 'ko'));
+    return list.sort((a, b) => (a.at || 0) - (b.at || 0));
+  }
+  function stopSync() {
+    fam.unsub.forEach(u => { try { u(); } catch (e) {} });
+    Object.assign(fam, { unsub: [], hid: null, ready: false, synced: {}, hh: null, invite: null });
+  }
+  async function mergeUpload(up) {
+    const add = {};
+    COLLS.forEach(c => { const have = new Set(S[c].map(x => x.id)); add[c] = up[c].filter(x => !have.has(x.id)); });
+    if (!add.plants.length && !add.logs.length && !add.groups.length) return;
+    if (up.ask && !confirm('이 휴대폰에만 있는 식물 ' + add.plants.length + '개와 기록 ' + add.logs.length + '건도 가족 정원에 합칠까요?\n취소하면 이 휴대폰의 데이터는 따로 보관해 두고, 가족 정원에서 나가면 다시 보여요.')) return;
+    COLLS.forEach(c => { S[c].push(...add[c]); });
+    save();
+    const ids = new Set(); S.plants.forEach(p => p.photo && ids.add(p.photo)); S.logs.forEach(l => l.photo && ids.add(l.photo));
+    let n = 0;
+    for (const id of ids) {
+      const v = await idb('readonly', st => st.get(id)).catch(() => null);
+      if (v) { await famPhotoPut(id, v); n++; }
+    }
+    render();
+    toast('이 휴대폰의 식물 ' + add.plants.length + '개' + (n ? '와 사진 ' + n + '장' : '') + '을 가족 정원에 올렸어요');
+  }
+  // 바뀐 문서만 Firestore에 쓰기 (오프라인이면 SDK가 모아 두었다가 연결되면 보냄)
+  function pushDiff() {
+    if (!famOn() || !fam.ready) return;
+    const { F, db } = fam.fb, hid = S.family.hid, ops = [];
+    COLLS.forEach(c => {
+      const prev = fam.synced[c] || new Map(), cur = new Map();
+      S[c].forEach(x => cur.set(x.id, stable(x)));
+      cur.forEach((js, id) => { if (prev.get(id) !== js) ops.push([c, id, JSON.parse(js)]); });
+      prev.forEach((_, id) => { if (!cur.has(id)) ops.push([c, id, null]); });
+      fam.synced[c] = cur;
+    });
+    for (let i = 0; i < ops.length; i += 400) {
+      const b = F.writeBatch(db);
+      ops.slice(i, i + 400).forEach(([c, id, data]) => { const r = F.doc(db, 'households', hid, c, id); data ? b.set(r, data) : b.delete(r); });
+      b.commit().catch(famErr);
+    }
+  }
+  // 가족이 방금 남긴 기록 알려 주기
+  function notifyRemote(snap) {
+    snap.docChanges().forEach(ch => {
+      if (ch.type !== 'added' || ch.doc.metadata.hasPendingWrites) return;
+      const l = ch.doc.data();
+      if (!l.by || l.by === fam.user.uid || Date.now() - (l.at || 0) > 120000) return;
+      const p = plantById(l.plantId);
+      toast(memberName(l.by) + '님이 ' + (p ? p.name + (l.type === 'water' ? '에 물을 줬어요' : ' · ' + (LOG_TYPES[l.type] || LOG_TYPES.note).label + ' 기록') : (LOG_TYPES[l.type] || LOG_TYPES.note).label + '을 남겼어요'));
+    });
+  }
+  // 사진: 1MB 문서 한도 안으로 (Storage 없이 Firestore만 사용 → 무료 요금제로 충분)
+  async function fitPhoto(data) {
+    if (data.length < 900000) return data;
+    const img = await loadImg(data), k = Math.min(1, 800 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.7);
+  }
+  async function famPhotoPut(id, data) {
+    if (!famOn()) return;
+    const { F, db } = fam.fb;
+    try { await F.setDoc(F.doc(db, 'households', S.family.hid, 'photos', id), { data: await fitPhoto(data), by: fam.user.uid, at: Date.now() }); }
+    catch (e) { famErr(e); }
+  }
+  function famPhotoDel(id) {
+    if (!famOn()) return;
+    const { F, db } = fam.fb;
+    F.deleteDoc(F.doc(db, 'households', S.family.hid, 'photos', id)).catch(famErr);
+  }
+  async function famPhotoGet(id) {
+    if (!famOn()) return null;
+    const { F, db } = fam.fb;
+    try { const d = await F.getDoc(F.doc(db, 'households', S.family.hid, 'photos', id)); return d.exists() ? d.data().data : null; }
+    catch (e) { return null; }
+  }
+  async function makeInvite() {
+    if (!famOn()) return;
+    const { F, db } = fam.fb, A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = ''; const r = crypto.getRandomValues(new Uint8Array(6)); r.forEach(x => { code += A[x % A.length]; });
+    try {
+      await F.setDoc(F.doc(db, 'invites', code), { hid: S.family.hid, by: fam.user.uid, expires: F.Timestamp.fromMillis(Date.now() + 7 * 864e5) });
+      fam.invite = code; render();
+    } catch (e) { toast('초대 코드를 만들지 못했어요 (' + (e.code || e.message) + ')'); }
+  }
+  const inviteLink = () => location.origin + location.pathname + '#join=' + fam.invite;
+  async function shareInvite() {
+    if (!fam.invite) return;
+    const text = '병아리 정원 "' + (S.family.name || '우리집 정원') + '"에 초대해요! 링크를 열고 구글로 로그인하면 함께 식물을 돌볼 수 있어요. (초대 코드 ' + fam.invite + ', 7일 동안 유효)';
+    try { if (navigator.share) { await navigator.share({ title: '병아리 정원 초대', text, url: inviteLink() }); return; } }
+    catch (e) { if (e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(text + '\n' + inviteLink()); toast('초대 링크를 복사했어요'); }
+    catch (e) { toast('초대 코드: ' + fam.invite); }
+  }
+  async function joinFamily(code) {
+    code = (code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!code) { toast('초대 코드를 적어 주세요'); return; }
+    if (!fam.user) { pendingJoin = code; toast('먼저 구글로 로그인해 주세요'); render(); return; }
+    pendingJoin = null;
+    if (/join=/.test(location.hash)) history.replaceState(history.state, '', location.pathname + location.search);
+    if (fam.busy) return;
+    fam.busy = true; render();
+    try {
+      const { F, db } = await fbLoad(), u = fam.user;
+      const inv = await F.getDoc(F.doc(db, 'invites', code));
+      if (!inv.exists()) throw new Error('초대 코드를 찾을 수 없어요');
+      const { hid, expires } = inv.data();
+      if (expires.toMillis() < Date.now()) throw new Error('기한이 지난 초대 코드예요. 새 코드를 받아 주세요');
+      if (S.family && S.family.hid === hid) { toast('이미 함께 쓰고 있어요'); }
+      else {
+        if (S.family) throw new Error('지금 가족 정원에서 먼저 나가 주세요');
+        await F.updateDoc(F.doc(db, 'households', hid), { members: F.arrayUnion(u.uid), ['memberInfo.' + u.uid]: me(), joinCode: code });
+        await F.setDoc(F.doc(db, 'users', u.uid), { household: hid }, { merge: true });
+        await enterFamily(hid);
+        toast('가족 정원에 들어왔어요! 이제 함께 돌봐요');
+      }
+    } catch (e) { toast('참여하지 못했어요: ' + (e.code === 'permission-denied' ? '초대 코드를 확인해 주세요' : e.message)); }
+    fam.busy = false; render();
+  }
+  async function leaveFamily() {
+    if (!famOn()) { exitFamilyLocal(); return; }
+    const { F, db } = fam.fb, u = fam.user, hid = S.family.hid;
+    stopSync();   // 내가 빠지는 변경을 "쫓겨남"으로 처리하지 않도록 먼저 구독을 끊음
+    try {
+      await F.updateDoc(F.doc(db, 'households', hid), { members: F.arrayRemove(u.uid), ['memberInfo.' + u.uid]: F.deleteField() });
+      await F.setDoc(F.doc(db, 'users', u.uid), { household: F.deleteField() }, { merge: true });
+    } catch (e) { toast('나가지 못했어요 (' + (e.code || e.message) + ')'); subscribe(hid); return; }
+    exitFamilyLocal();
+    toast('가족 정원에서 나왔어요');
+  }
+  // 이 기기를 원래(가족 정원 전) 데이터로 되돌림. 가족 정원 데이터는 서버에 남음
+  function exitFamilyLocal() {
+    stopSync();
+    if (!S.family) return;
+    let st = null;
+    try { st = JSON.parse(localStorage.getItem(STASH) || 'null'); } catch (e) {}
+    const d = defaults(), settings = S.settings;
+    S = st ? Object.assign(d, st, { settings, family: null }) : Object.assign(d, { settings });
+    try { localStorage.removeItem(STASH); } catch (e) {}
+    saveLocal(); updateBadge();
+    navStack.length = 0; Object.assign(ui, { plant: null, edit: null, day: null, group: '' });
+    render();
+  }
+  const G_LOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
+  function familyCard() {
+    const head = (sub, right) => '<div class="card-h"><span class="tile sm">' + ico('users') + '</span><h2>가족 정원<small>' + sub + '</small></h2>' + (right || '') + '</div>';
+    if (!fam.cfg) return '<section class="card">' + head('가족과 함께 반려식물 돌보기') + '<p class="small muted" style="margin:0">가족 공유를 켜려면 Firebase 설정이 필요해요. 저장소의 <b>chick-garden/FAMILY_SETUP.md</b>를 따라 <b>firebase-config.js</b>를 채워 주세요. 그전까지는 이 휴대폰에만 저장돼요.</p></section>';
+    if (fam.user === undefined && fam.fb) return '<section class="card">' + head('연결하는 중…') + '<p class="small muted" style="margin:0">로그인 상태를 확인하고 있어요.</p></section>';
+    if (!fam.user) {
+      return '<section class="card">' + head('각자 구글 계정으로, 한 정원을 함께') +
+        (pendingJoin ? '<div class="note warn" style="margin-bottom:12px"><span class="grow">초대 코드 <b>' + esc(pendingJoin) + '</b>로 가족 정원에 들어가려면 먼저 로그인해 주세요.</span></div>' : '') +
+        '<p class="small muted" style="margin:0 0 12px">로그인하면 가족 정원을 만들거나 초대받은 정원에 들어갈 수 있어요. 누가 물을 줬는지도 함께 보여요.</p>' +
+        '<button type="button" class="gbtn" data-act="signIn">' + G_LOGO + 'Google로 로그인</button></section>';
+    }
+    const who = '<div class="member"><span class="avatar">' + esc(myName().slice(0, 1)) + '</span><div class="body" style="flex:1;min-width:0"><div class="small" style="font-weight:700">' + esc(myName()) + '</div><div class="hint">' + esc(fam.user.email || '') + '</div></div><button type="button" class="pill-btn" data-act="signOut">로그아웃</button></div>';
+    if (!S.family) {
+      return '<section class="card">' + head('아직 가족 정원이 없어요') + who +
+        '<div class="f" style="margin:12px 0 8px"><label for="famName" class="small muted" style="font-weight:700">새 가족 정원 만들기</label><div class="inline"><input type="text" id="famName" maxlength="20" placeholder="우리집 정원" value=""><button type="button" class="btn primary sm" data-act="createFamily"' + (fam.busy ? ' disabled' : '') + '>만들기</button></div>' +
+        '<span class="hint">이 휴대폰의 식물과 기록이 가족 정원으로 옮겨져요.</span></div>' +
+        '<div class="f" style="margin:12px 0 0"><label for="joinCode" class="small muted" style="font-weight:700">초대 코드로 들어가기</label><div class="inline"><input type="text" id="joinCode" maxlength="12" placeholder="예: K7P2QX" autocapitalize="characters" value="' + esc(pendingJoin || '') + '"><button type="button" class="btn sm" data-act="joinFamily"' + (fam.busy ? ' disabled' : '') + '>참여</button></div></div></section>';
+    }
+    const members = (fam.hh && fam.hh.members) || [S.family.uid];
+    const off = !fam.ready || /오프라인|오류|로그아웃/.test(fam.status);
+    let h = '<section class="card">' + head(esc(S.family.name || '우리집 정원'), '<span class="famline"><i class="' + (off ? 'off' : '') + '"></i>' + esc(fam.status || '연결 중…') + '</span>');
+    h += '<div style="margin-bottom:6px">' + members.map(uid => '<div class="member"><span class="avatar">' + esc(memberName(uid).slice(0, 1)) + '</span><div class="body" style="flex:1;min-width:0"><div class="small" style="font-weight:700">' + esc(memberName(uid)) + (uid === fam.user.uid ? ' <span class="hint">(나)</span>' : '') + '</div>' +
+      (uid === (fam.hh && fam.hh.owner) ? '<div class="hint">정원을 만든 사람</div>' : '') + '</div>' + (uid === fam.user.uid ? '<button type="button" class="pill-btn" data-act="signOut">로그아웃</button>' : '') + '</div>').join('') + '</div>';
+    if (fam.invite) h += '<p class="small muted" style="margin:6px 0 0">가족에게 이 코드나 링크를 보내 주세요 (7일 동안 유효)</p><div class="code" aria-label="초대 코드">' + esc(fam.invite) + '</div>' +
+      '<div class="btns"><button type="button" class="btn primary sm" data-act="shareInvite">' + ico('share') + '초대 링크 보내기</button><button type="button" class="btn sm" data-act="invite">새 코드</button></div>';
+    else h += '<button type="button" class="btn primary block" data-act="invite"' + (fam.ready ? '' : ' disabled') + '>' + ico('link') + '가족 초대하기</button>';
+    h += '<p style="margin:12px 0 0"><button type="button" class="linkbtn" data-act="leaveFamily">가족 정원에서 나가기</button></p></section>';
+    return h;
+  }
+
   /* ───────── 백업 ───────── */
   async function exportBackup() {
     try {
-      const photos = await photoAll();
+      const ids = new Set(); S.plants.forEach(p => p.photo && ids.add(p.photo)); S.logs.forEach(l => l.photo && ids.add(l.photo));
+      const photos = {};
+      for (const id of ids) { const v = await photoGet(id); if (v) photos[id] = v; }
       S.lastBackup = new Date().toISOString();
       const data = { app: 'chick-garden', v: 1, exported: S.lastBackup, state: S, photos };
       const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -1594,12 +1949,16 @@
       const data = JSON.parse(await file.text());
       if (!data || data.app !== 'chick-garden' || !data.state || !Array.isArray(data.state.plants)) throw new Error('병아리 정원 백업 파일이 아니에요');
       const st = data.state;
-      if (!confirm('백업(' + (data.exported ? fmtDate(data.exported.slice(0, 10)) : '날짜 모름') + ', 식물 ' + st.plants.length + '개 · 기록 ' + (st.logs || []).length + '건)으로 지금 데이터를 바꿀까요?')) return;
-      await photoClear();
+      if (!confirm('백업(' + (data.exported ? fmtDate(data.exported.slice(0, 10)) : '날짜 모름') + ', 식물 ' + st.plants.length + '개 · 기록 ' + (st.logs || []).length + '건)으로 지금 데이터를 바꿀까요?' + (S.family ? '\n가족 정원 전체가 이 백업으로 바뀌어요.' : ''))) return;
+      if (!S.family) await photoClear();
       for (const [k, v] of Object.entries(data.photos || {})) if (typeof v === 'string' && v.startsWith('data:image/')) await photoPut(k, v);
-      const d = defaults();
-      S = Object.assign(d, st, { settings: Object.assign(d.settings, st.settings || {}), logs: Array.isArray(st.logs) ? st.logs : [] });
-      save(); navStack.length = 0; go({ tab: 'today', plant: null, edit: null });
+      if (S.family) {   // 가족 정원: 식물·그룹·기록만 바꾸고 가족 연결은 유지
+        S.plants = st.plants; S.groups = Array.isArray(st.groups) ? st.groups : []; S.logs = Array.isArray(st.logs) ? st.logs : [];
+      } else {
+        const d = defaults();
+        S = Object.assign(d, st, { settings: Object.assign(d.settings, st.settings || {}), logs: Array.isArray(st.logs) ? st.logs : [], family: null });
+      }
+      save(); navStack.length = 0; go({ tab: 'today', plant: null, edit: null, day: null });
       toast('백업을 불러왔어요');
     } catch (err) { toast('불러오기 실패: ' + err.message); }
   });
@@ -1615,7 +1974,7 @@
   }
   async function seed() {
     const t = today();
-    const g1 = { id: nid('g'), name: '거실 친구들' }, g2 = { id: nid('g'), name: '베란다 텃밭' };
+    const g1 = { id: nid('g'), name: '거실 친구들', at: 1 }, g2 = { id: nid('g'), name: '베란다 텃밭', at: 2 };
     S.groups.push(g1, g2);
     const mk = (name, species, extra) => {
       const p = Object.assign({ id: nid('p'), name, species, group: '', location: '', light: '', waterEvery: 7, checkMode: false, fertEvery: 0, created: addDays(t, -120) }, extra);
@@ -1654,11 +2013,16 @@
 
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  const jm = location.hash.match(/join=([A-Za-z0-9]{4,12})/);
+  if (jm) { pendingJoin = jm[1].toUpperCase(); if (fam.cfg) ui.tab = 'settings'; }
+  if (fam.cfg && (S.family || pendingJoin)) fbLoad().catch(e => { fam.status = '연결 실패 (' + e.message + ')'; render(); });
   render();
   updateBadge();
 
   // 테스트용 훅
-  window.__cg = { waterInfo, fertInfo, dueLabel, addDays, diffDays, calEvents, get state() { return S; } };
+  window.__cg = { waterInfo, fertInfo, dueLabel, addDays, diffDays, calEvents, get state() { return S; }, get fam() { return { user: fam.user && fam.user.uid, ready: fam.ready, status: fam.status, hid: fam.hid, invite: fam.invite, members: fam.hh && fam.hh.members }; } };
+  // 에뮬레이터(localhost)에서만: 가짜 구글 토큰으로 로그인 (자동 테스트용)
+  if (isEmu()) window.__cg.testSignIn = async claims => { const { Au, auth } = await fbLoad(); await Au.signInWithCredential(auth, Au.GoogleAuthProvider.credential(JSON.stringify(claims))); };
 })();
 </script>
 </body>
