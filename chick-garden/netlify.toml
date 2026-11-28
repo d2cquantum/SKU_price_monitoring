@@ -6,3 +6,11 @@
   # 이 폴더에 변경이 없으면 빌드를 건너뜀 (다른 앱만 고친 커밋은 배포 안 함)
   # 단, 첫 빌드처럼 비교할 이전 커밋이 없거나 같은 커밋이면 항상 빌드 (종료 코드 0 = 건너뜀, 1 = 빌드)
   ignore  = "[ -n \"$CACHED_COMMIT_REF\" ] && [ \"$CACHED_COMMIT_REF\" != \"$COMMIT_REF\" ] && git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- ."
+
+# 아이폰 구글 로그인용: Firebase 로그인 화면(/__/auth/*)과 설정(/__/firebase/*)을 이 사이트 주소에서 제공.
+# 사파리는 다른 도메인(firebaseapp.com)의 저장소를 막기 때문에, 같은 주소에서 로그인해야 결과가 앱으로 돌아온다.
+[[redirects]]
+  from = "/__/*"
+  to = "https://chick-garden.firebaseapp.com/__/:splat"
+  status = 200
+  force = true

@@ -19,7 +19,7 @@
 | `firebase.json` | 규칙 배포·에뮬레이터 설정 (테스트용 에뮬레이터: auth 9099, firestore 8080) |
 | `FAMILY_SETUP.md` | 사용자용 가족 정원 설정 안내 |
 | `manifest.webmanifest` | PWA 설치 정보 (상대 경로 `start_url`/`scope`) |
-| `sw.js` | 서비스 워커. 화면·`firebase-config.js`는 네트워크 우선 + 캐시 대체, 나머지 앱 파일과 gstatic Firebase SDK는 캐시 우선. Firestore·로그인 요청은 건드리지 않음. 캐시 이름 `cg-v4` (파일 구성을 바꾸면 버전 올리기) |
+| `sw.js` | 서비스 워커. 화면·`firebase-config.js`는 네트워크 우선 + 캐시 대체, 나머지 앱 파일과 gstatic Firebase SDK는 캐시 우선. Firestore·로그인 요청은 건드리지 않음. 캐시 이름 `cg-v5` (파일 구성을 바꾸면 버전 올리기) |
 | `icon-*.png` | 앱 아이콘 (진한 초록 바탕, 빛 번짐, 화분 새싹 — 팔레트 색). `icon-maskable-512.png`는 안전 영역 안에 그림 |
 
 ## 디자인
@@ -50,7 +50,9 @@
 
 ## 가족 정원 (Firebase)
 
-- **로그인:** 구글(`signInWithPopup`, 막히면 redirect). 각자 계정 → `users/{uid}.household`로 어느 정원인지 기억 → 다른 휴대폰에서 로그인해도 자동 재연결(`checkMembership`)
+- **로그인:** 구글. 안드로이드·데스크톱은 `signInWithPopup`(막히면 redirect, `authDomain` = `chick-garden.firebaseapp.com`). **아이폰·아이패드**는 홈 화면 앱에서 팝업 결과가 돌아오지 않고 사파리가 다른 도메인 저장소를 막으므로, `firebase-config.js`의 `authProxyHosts`에 있는 주소에서는 `authDomain`을 사이트 주소로 바꾸고 `signInWithRedirect` 사용. `netlify.toml`이 `/__/*`를 `chick-garden.firebaseapp.com/__/*`로 프록시하고, Google Cloud OAuth 클라이언트에 `https://chick-garden.netlify.app/__/auth/handler`를 리디렉션 URI로 등록해야 함(`FAMILY_SETUP.md` 2-4). 서비스 워커는 `/__/` 경로를 건드리지 않음
+- **시작 시 로그인 확인:** 로그인한 적이 있으면(`localStorage['cg-auth']`) 가족 정원이 없어도 시작할 때 SDK를 불러와 로그인 상태와 리디렉션 결과를 받음. 초대 코드는 로그인하러 다녀오는 동안 `localStorage['cg-pending-join']`에 보관
+- 각자 계정 → `users/{uid}.household`로 어느 정원인지 기억 → 다른 휴대폰에서 로그인해도 자동 재연결(`checkMembership`)
 - **Firestore 구조:** `households/{hid}` `{name, owner, members[], memberInfo{uid:{name}}}` 아래에 `plants`·`groups`·`logs`(앱의 `S` 항목 그대로)와 `photos/{id}` `{data: JPEG dataURL(1MB 미만), by, at}`. 초대는 `invites/{code}` `{hid, by, expires(7일)}`
 - **사진을 Storage가 아닌 Firestore에:** 유료(Blaze) 요금제 없이 쓰기 위해. 사진은 필요할 때 문서 하나씩 받아 IndexedDB에 캐시(`photoGet` → `famPhotoGet`)
 - **동기화:** `save()` → `pushDiff()`가 `S`와 마지막으로 맞춘 상태(`fam.synced`, 키 순서를 고정한 `stable()` 문자열)를 비교해 바뀐/지운 문서만 배치로 씀. `onSnapshot`으로 받은 내용이 `S.plants/groups/logs`를 덮어씀. 오프라인 쓰기는 Firestore 영구 캐시(`persistentLocalCache`)가 모았다가 전송

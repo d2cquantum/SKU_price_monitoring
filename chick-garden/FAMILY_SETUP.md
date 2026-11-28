@@ -16,6 +16,12 @@
 3. **설정** 탭 → **승인된 도메인** → **도메인 추가**
    - `chick-garden.netlify.app` (병아리 정원 사이트 주소. Netlify에서 바꿨다면 그 주소)
    - 미리보기 주소에서도 로그인해 보려면 그 주소도 하나씩 추가 (예: `deploy-preview-8--chick-garden.netlify.app`)
+4. **아이폰용 설정 (한 번만):** <https://console.cloud.google.com/apis/credentials?project=chick-garden> 접속
+   (Firebase와 같은 구글 계정, 프로젝트 `chick-garden`)
+   - **OAuth 2.0 클라이언트 ID** 목록에서 **Web client (auto created by Google Service)** 클릭
+   - **승인된 JavaScript 원본**에 `https://chick-garden.netlify.app` 추가
+   - **승인된 리디렉션 URI**에 `https://chick-garden.netlify.app/__/auth/handler` 추가 → **저장** (적용까지 5분~몇 시간 걸릴 수 있어요)
+   - 왜 필요한가요? 아이폰(사파리)은 다른 사이트(`firebaseapp.com`)의 로그인 정보를 막아서, 아이폰에서는 로그인 화면을 우리 사이트 주소(`/__/auth`)로 띄웁니다. 그 주소를 구글에 "허용된 로그인 복귀 주소"로 알려 주는 단계예요.
 
 ## 3. 데이터베이스(Firestore) 만들기
 1. **빌드 → Firestore Database → 데이터베이스 만들기**
@@ -51,6 +57,7 @@ window.CG_FIREBASE = {
 
 **초대받은 사람 (예: 아내)**
 1. 받은 링크를 크롬으로 열기 → **Google로 로그인**
+   - **아이폰:** 사파리에서 **홈 화면에 추가**로 앱을 먼저 설치하고, 설치한 앱의 **설정 → 초대 코드로 들어가기**에 코드 6자리를 넣은 뒤 로그인하세요. 아이폰은 사파리와 설치한 앱의 저장 공간이 따로예요. 로그인하면 구글 화면으로 이동했다가 앱으로 돌아와요.
 2. 자기 휴대폰에만 있던 식물이 있으면 "합칠까요?"라고 물어봐요. 합치면 둘의 식물이 한 정원에 모입니다
 3. 끝! 이제 한 사람이 캘린더에서 닉네임을 누르면 다른 사람 화면에도 바로 "물 줌"으로 바뀌고, "지은님이 몬순이에 물을 줬어요" 같은 알림이 떠요
 
@@ -66,6 +73,8 @@ window.CG_FIREBASE = {
 | 증상 | 확인할 것 |
 |---|---|
 | 로그인 창이 바로 닫히고 `auth/unauthorized-domain` | 2단계 3번 **승인된 도메인**에 지금 주소가 있는지 |
+| 아이폰에서 구글 화면에 `오류 400: redirect_uri_mismatch` | 2단계 4번 **승인된 리디렉션 URI**를 추가했는지 (저장 후 몇 분 기다리기) |
+| 아이폰에서 로그인하고 돌아왔는데 그대로 로그아웃 상태 | 설치한 앱을 완전히 닫았다 다시 열기 → 그래도 안 되면 `https://chick-garden.netlify.app/__/auth/handler`가 Netlify 404가 아닌지 확인 |
 | 로그인 창이 안 열림 | 크롬 팝업 차단 해제, 또는 설치된 앱 대신 크롬 브라우저에서 한 번 로그인 |
 | "접근할 수 없어요" / `permission-denied` | 3단계 4번 **규칙**을 게시했는지, 초대 코드가 7일 안인지 |
 | 설정에 "Firebase 설정이 필요해요"가 계속 보임 | `firebase-config.js`가 바뀐 채로 배포됐는지, 앱을 완전히 닫았다 다시 열기 |
