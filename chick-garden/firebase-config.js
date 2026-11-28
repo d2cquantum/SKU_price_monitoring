@@ -17,5 +17,7 @@ window.CG_FIREBASE = {
   projectId: "chick-garden",
   storageBucket: "chick-garden.firebasestorage.app",
   messagingSenderId: "369143866412",
-  appId: "1:369143866412:web:4ff4ae84a3410b82e69d89"
+  appId: "1:369143866412:web:4ff4ae84a3410b82e69d89",
+  // 아이폰에서는 이 주소들에서 로그인 화면을 사이트 주소(/__/auth, netlify.toml 프록시)로 띄움
+  authProxyHosts: ["chick-garden.netlify.app"]
 };

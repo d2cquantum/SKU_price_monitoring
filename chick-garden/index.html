@@ -1623,6 +1623,17 @@
   const STASH = 'cg-local-stash';   // 가족 정원에 들어가기 전 이 기기의 데이터
   const fam = { cfg: window.CG_FIREBASE || null, fb: null, user: undefined, hh: null, hid: null, ready: false, unsub: [], synced: {}, status: '', invite: null, busy: false };
   let pendingJoin = null;
+  const AUTH_FLAG = 'cg-auth';          // 이 기기에서 로그인한 적이 있음 → 시작할 때 로그인 상태 확인
+  const JOIN_KEY = 'cg-pending-join';   // 로그인하러 다녀오는 동안 초대 코드 보관
+  const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+  // 아이폰·아이패드(사파리 엔진): 홈 화면 앱에서는 로그인 팝업의 결과가 앱으로 돌아오지 않고,
+  // 사파리가 다른 도메인(firebaseapp.com)의 저장소를 막아서 리디렉션 결과도 못 읽는다.
+  // → 사이트 주소의 /__/auth/*를 Netlify가 Firebase로 프록시(netlify.toml)하고, 로그인 도메인을 사이트 주소로 바꿔 리디렉션 로그인.
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = () => navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  const sameSiteAuth = () => !!(fam.cfg && (fam.cfg.authProxyHosts || []).includes(location.hostname));
+  const useRedirect = () => (isIOS() && sameSiteAuth()) || !!(fam.cfg && fam.cfg.forceRedirect && isEmu());
   const stable = v => Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
     : v && typeof v === 'object' ? '{' + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}'
     : JSON.stringify(v === undefined ? null : v);
@@ -1648,19 +1659,26 @@
     if (!fam.cfg) throw new Error('Firebase 설정이 없어요');
     const base = 'https://www.gstatic.com/firebasejs/' + FB_VER + '/';
     const [A, Au, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
-    const app = A.initializeApp(fam.cfg);
+    const opts = Object.assign({}, fam.cfg);
+    if (isIOS() && sameSiteAuth()) opts.authDomain = location.host;   // 로그인 화면을 같은 사이트 주소에서 (netlify.toml 프록시)
+    ['authProxyHosts', 'emulator', 'forceRedirect'].forEach(k => delete opts[k]);
+    const app = A.initializeApp(opts);
     const auth = Au.getAuth(app);
     let db;
     try { db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); }
     catch (e) { db = F.getFirestore(app); }
     if (isEmu()) { Au.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true }); F.connectFirestoreEmulator(db, '127.0.0.1', 8080); }
     fam.fb = { A, Au, F, app, auth, db };
-    Au.getRedirectResult(auth).catch(e => console.warn('redirect', e));
+    Au.getRedirectResult(auth).catch(e => {
+      console.warn('redirect', e);
+      toast('로그인하지 못했어요 (' + (e.code || e.message) + ')');
+    });
     Au.onAuthStateChanged(auth, u => { fam.user = u || null; onAuth(); });
     return fam.fb;
   }
   function onAuth() {
     const u = fam.user;
+    lsSet(AUTH_FLAG, u ? '1' : null);
     if (u && S.family && S.family.uid === u.uid) subscribe(S.family.hid);
     else if (u && S.family) exitFamilyLocal();          // 다른 계정으로 로그인함
     else if (u) checkMembership();
@@ -1686,6 +1704,13 @@
     const { Au, auth } = fb;
     const prov = new Au.GoogleAuthProvider();
     prov.setCustomParameters({ prompt: 'select_account' });
+    if (useRedirect()) {   // 아이폰: 구글 화면으로 이동했다가 돌아오면 시작할 때 결과를 받음
+      lsSet(AUTH_FLAG, '1');
+      if (pendingJoin) lsSet(JOIN_KEY, pendingJoin);
+      try { await Au.signInWithRedirect(auth, prov); }
+      catch (e) { toast('로그인하지 못했어요 (' + (e.code || e.message) + ')'); }
+      return;
+    }
     try { await Au.signInWithPopup(auth, prov); }
     catch (e) {
       if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') return Au.signInWithRedirect(auth, prov);
@@ -1849,8 +1874,8 @@
   async function joinFamily(code) {
     code = (code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!code) { toast('초대 코드를 적어 주세요'); return; }
-    if (!fam.user) { pendingJoin = code; toast('먼저 구글로 로그인해 주세요'); render(); return; }
-    pendingJoin = null;
+    if (!fam.user) { pendingJoin = code; lsSet(JOIN_KEY, code); toast('먼저 구글로 로그인해 주세요'); render(); return; }
+    pendingJoin = null; lsSet(JOIN_KEY, null);
     if (/join=/.test(location.hash)) history.replaceState(history.state, '', location.pathname + location.search);
     if (fam.busy) return;
     fam.busy = true; render();
@@ -1904,7 +1929,8 @@
       return '<section class="card">' + head('각자 구글 계정으로, 한 정원을 함께') +
         (pendingJoin ? '<div class="note warn" style="margin-bottom:12px"><span class="grow">초대 코드 <b>' + esc(pendingJoin) + '</b>로 가족 정원에 들어가려면 먼저 로그인해 주세요.</span></div>' : '') +
         '<p class="small muted" style="margin:0 0 12px">로그인하면 가족 정원을 만들거나 초대받은 정원에 들어갈 수 있어요. 누가 물을 줬는지도 함께 보여요.</p>' +
-        '<button type="button" class="gbtn" data-act="signIn">' + G_LOGO + 'Google로 로그인</button></section>';
+        '<button type="button" class="gbtn" data-act="signIn">' + G_LOGO + 'Google로 로그인</button>' +
+        (useRedirect() ? '<p class="hint" style="margin:8px 0 0;text-align:center">구글 로그인 화면으로 이동했다가 이 앱으로 돌아와요.</p>' : '') + '</section>';
     }
     const who = '<div class="member"><span class="avatar">' + esc(myName().slice(0, 1)) + '</span><div class="body" style="flex:1;min-width:0"><div class="small" style="font-weight:700">' + esc(myName()) + '</div><div class="hint">' + esc(fam.user.email || '') + '</div></div><button type="button" class="pill-btn" data-act="signOut">로그아웃</button></div>';
     if (!S.family) {
@@ -2014,13 +2040,15 @@
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
   const jm = location.hash.match(/join=([A-Za-z0-9]{4,12})/);
-  if (jm) { pendingJoin = jm[1].toUpperCase(); if (fam.cfg) ui.tab = 'settings'; }
-  if (fam.cfg && (S.family || pendingJoin)) fbLoad().catch(e => { fam.status = '연결 실패 (' + e.message + ')'; render(); });
+  if (jm) { pendingJoin = jm[1].toUpperCase(); lsSet(JOIN_KEY, pendingJoin); }
+  else if (lsGet(JOIN_KEY)) pendingJoin = lsGet(JOIN_KEY);
+  if (pendingJoin && fam.cfg) ui.tab = 'settings';
+  if (fam.cfg && (S.family || pendingJoin || lsGet(AUTH_FLAG))) fbLoad().catch(e => { fam.status = '연결 실패 (' + e.message + ')'; render(); });
   render();
   updateBadge();
 
   // 테스트용 훅
-  window.__cg = { waterInfo, fertInfo, dueLabel, addDays, diffDays, calEvents, get state() { return S; }, get fam() { return { user: fam.user && fam.user.uid, ready: fam.ready, status: fam.status, hid: fam.hid, invite: fam.invite, members: fam.hh && fam.hh.members }; } };
+  window.__cg = { waterInfo, fertInfo, dueLabel, addDays, diffDays, calEvents, get state() { return S; }, get fam() { return { user: fam.user && fam.user.uid, ready: fam.ready, status: fam.status, hid: fam.hid, invite: fam.invite, members: fam.hh && fam.hh.members, ios: isIOS(), standalone: isStandalone(), redirect: useRedirect(), authDomain: fam.fb && fam.fb.app.options.authDomain }; } };
   // 에뮬레이터(localhost)에서만: 가짜 구글 토큰으로 로그인 (자동 테스트용)
   if (isEmu()) window.__cg.testSignIn = async claims => { const { Au, auth } = await fbLoad(); await Au.signInWithCredential(auth, Au.GoogleAuthProvider.credential(JSON.stringify(claims))); };
 })();
