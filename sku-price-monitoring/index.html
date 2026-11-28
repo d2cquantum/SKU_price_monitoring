@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Samsung Price Monitor | 글로벌 SKU 가격 모니터링</title>
+  <meta name="description" content="삼성전자 임직원 전용 글로벌 SKU 가격 모니터링 대시보드. Samsung.com 기준가 대비 주요 거래선 실시간 가격 비교." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     VIEW 1: LANDING PAGE
+     ══════════════════════════════════════ -->
+<div id="view-landing" class="view active">
+  <nav class="landing-nav">
+    <div class="landing-nav-inner">
+      <div class="landing-logo">
+        <svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#1428A0"/><text x="16" y="22" font-size="14" font-weight="800" fill="white" text-anchor="middle" font-family="Inter">S</text></svg>
+        <span>Samsung <strong>Price Monitor</strong></span>
+      </div>
+      <div class="landing-nav-actions">
+        <button class="btn-ghost" id="landing-login-btn">로그인</button>
+        <button class="btn-primary" id="landing-register-btn">회원가입</button>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-badge">Samsung Electronics Confidential</div>
+      <h1 class="hero-title">글로벌 SKU<br/>가격 모니터링</h1>
+      <p class="hero-subtitle">Samsung.com 기준가(RRP) 대비 전 세계 주요 거래선의<br/>실시간 가격을 한눈에 비교하고 이탈을 즉시 감지합니다.</p>
+      <div class="hero-actions">
+        <button class="btn-hero-primary" id="hero-register-btn">지금 시작하기</button>
+        <button class="btn-hero-ghost" id="hero-login-btn">이미 계정이 있으신가요?</button>
+      </div>
+      <div class="hero-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        삼성전자 임직원(@samsung.com) 전용 서비스입니다
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-card">
+        <div class="hc-header">
+          <div class="hc-dot red"></div><div class="hc-dot yellow"></div><div class="hc-dot green"></div>
+          <span>Galaxy S25 Ultra · KR</span>
+        </div>
+        <div class="hc-row ref"><span>Samsung.com (RRP)</span><span>₩1,800,000</span></div>
+        <div class="hc-row ok"><span>쿠팡</span><span class="up">₩1,930,000 ▲7.2%</span></div>
+        <div class="hc-row ok"><span>네이버쇼핑</span><span>₩1,790,000 ▼0.6%</span></div>
+        <div class="hc-row ok"><span>Best Buy (US)</span><span>$1,299 ▲0%</span></div>
+        <div class="hc-row ok"><span>Amazon DE</span><span>€1,349 ▼0.3%</span></div>
+        <div class="hc-badge-row"><span class="hc-badge alert">가격 이탈 감지 · 쿠팡 +7.2%</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="features-inner">
+      <h2 class="section-title">왜 필요한가요?</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="fc-icon" style="background:#e8ecf8;color:#1428A0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+          </div>
+          <h3>글로벌 다국가 지원</h3>
+          <p>아태·동남아·미주·유럽·MEA 10+ 국가별 Samsung.com 기준가와 현지 주요 거래선 가격을 동시 모니터링합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon" style="background:#ecfdf5;color:#059669">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+          </div>
+          <h3>실시간 가격 이탈 감지</h3>
+          <p>MX / VD / DA 사업부별 SKU 기준가 대비 거래선 가격 편차를 자동 감지하고 즉시 알림을 발송합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="fc-icon" style="background:#fff7ed;color:#d97706">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <h3>Excel 대량 SKU Import</h3>
+          <p>기존 Excel 시트에서 SKU 코드를 일괄 업로드하고, Samsung.com 에서 기준가를 자동으로 조회합니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how-it-works">
+    <div class="how-inner">
+      <h2 class="section-title">어떻게 작동하나요?</h2>
+      <div class="steps-row">
+        <div class="step"><div class="step-num">1</div><h4>SKU 등록</h4><p>SKU 코드와 국가, 사업부를 입력하거나 엑셀 파일로 일괄 등록합니다.</p></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><div class="step-num">2</div><h4>기준가 확인</h4><p>Samsung.com에서 RRP 기준가와 현재 판매가를 자동으로 조회합니다.</p></div>
+        <div class="step-arrow">→</div>
+        <div class="step"><div class="step-num">3</div><h4>거래선 비교</h4><p>국가별 매출 상위 5개 거래선 가격을 실시간으로 비교합니다.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="landing-footer">
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <svg width="24" height="24" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="rgba(255,255,255,0.2)"/><text x="16" y="22" font-size="14" font-weight="800" fill="white" text-anchor="middle" font-family="Inter">S</text></svg>
+        Samsung Price Monitor
+      </div>
+      <p>© 2026 Samsung Electronics Co., Ltd. 임직원 내부 전용 시스템</p>
+      <p>본 시스템의 무단 접근 및 자료 유출은 사규 및 관련 법률에 따라 처벌받을 수 있습니다.</p>
+    </div>
+  </footer>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW 2: AUTH (LOGIN / REGISTER)
+     ══════════════════════════════════════ -->
+<div id="view-auth" class="view">
+  <div class="auth-wrapper">
+    <div class="auth-left">
+      <div class="auth-left-content">
+        <svg width="48" height="48" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="white"/><text x="16" y="22" font-size="14" font-weight="800" fill="#1428A0" text-anchor="middle" font-family="Inter">S</text></svg>
+        <h2>Samsung<br/>Price Monitor</h2>
+        <p>글로벌 SKU 가격 이탈을 실시간으로 감지하는 삼성전자 임직원 전용 대시보드입니다.</p>
+        <div class="auth-badges">
+          <span>🌏 10+ 국가</span>
+          <span>📦 MX / VD / DA</span>
+          <span>🔔 실시간 알림</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-right">
+      <div class="auth-box">
+        <button class="auth-back" id="auth-back-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          메인으로
+        </button>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login" id="tab-login">로그인</button>
+          <button class="auth-tab" data-tab="register" id="tab-register">회원가입</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="form-login" class="auth-form active">
+          <h3>다시 오셨군요 👋</h3>
+          <p class="auth-form-sub">삼성전자 임직원 계정으로 로그인하세요</p>
+          <div class="form-group">
+            <label class="form-label">이메일</label>
+            <input type="email" id="login-email" class="form-input" placeholder="kim.minsu@samsung.com" autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">비밀번호</label>
+            <input type="password" id="login-password" class="form-input" placeholder="비밀번호를 입력하세요" />
+          </div>
+          <div class="auth-error" id="login-error"></div>
+          <button type="submit" class="btn-auth-primary" id="btn-login">로그인</button>
+          <p class="auth-switch">계정이 없으신가요? <a href="#" id="switch-to-register">회원가입</a></p>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="form-register" class="auth-form">
+          <h3>계정 만들기 🚀</h3>
+          <p class="auth-form-sub">삼성전자(@samsung.com) 이메일로만 가입 가능합니다</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">성명</label>
+              <input type="text" id="reg-name" class="form-input" placeholder="홍길동" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">소속 사업부</label>
+              <select id="reg-bu" class="form-input">
+                <option value="">선택</option>
+                <option value="MX">MX (모바일)</option>
+                <option value="VD">VD (영상디스플레이)</option>
+                <option value="DA">DA (생활가전)</option>
+                <option value="HQ">본사 (전략/마케팅)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">삼성 이메일</label>
+            <div class="input-suffix-wrap">
+              <input type="email" id="reg-email" class="form-input" placeholder="kim.minsu@samsung.com" autocomplete="email" />
+              <span class="input-suffix-badge" id="email-domain-badge"></span>
+            </div>
+            <small class="form-hint">@samsung.com 이메일 주소만 허용됩니다</small>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">비밀번호</label>
+              <input type="password" id="reg-password" class="form-input" placeholder="8자 이상" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">비밀번호 확인</label>
+              <input type="password" id="reg-password2" class="form-input" placeholder="비밀번호 재입력" />
+            </div>
+          </div>
+          <div class="auth-error" id="register-error"></div>
+          <button type="submit" class="btn-auth-primary" id="btn-register">가입 완료</button>
+          <p class="auth-switch">이미 계정이 있으신가요? <a href="#" id="switch-to-login">로그인</a></p>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW 3: APP DASHBOARD
+     ══════════════════════════════════════ -->
+<div id="view-app" class="view">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <svg width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="rgba(255,255,255,0.2)"/><text x="16" y="22" font-size="14" font-weight="800" fill="white" text-anchor="middle" font-family="Inter">S</text></svg>
+      <span class="sidebar-brand">Price Monitor</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">메인</div>
+      <a href="#" class="nav-item active" data-page="dashboard" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        대시보드
+      </a>
+      <a href="#" class="nav-item" data-page="sku-list" id="nav-sku-list">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+        SKU 목록
+      </a>
+      <a href="#" class="nav-item" data-page="alerts" id="nav-alerts">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        가격 알림
+        <span class="badge" id="alert-badge">0</span>
+      </a>
+      <div class="nav-section-label">분석</div>
+      <a href="#" class="nav-item" data-page="trend" id="nav-trend">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        가격 추이
+      </a>
+      <a href="#" class="nav-item" data-page="channels" id="nav-channels">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+        거래선 관리
+      </a>
+      <div class="nav-section-label">설정</div>
+      <a href="#" class="nav-item" data-page="settings" id="nav-settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2m0 16v2m7.07-7h-2M4.93 12H3"/></svg>
+        설정
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-avatar" id="sidebar-avatar">--</div>
+      <div class="user-info">
+        <div class="user-name" id="sidebar-name">--</div>
+        <div class="user-role" id="sidebar-role">--</div>
+      </div>
+      <button class="logout-btn" id="logout-btn" title="로그아웃">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="main-content">
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebar-toggle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="breadcrumb" id="breadcrumb">대시보드</div>
+      </div>
+      <div class="topbar-right">
+        <div class="last-updated">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span id="update-time">--:--:--</span>
+        </div>
+        <button class="btn-refresh" id="btn-refresh" title="전체 가격 새로고침">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        </button>
+        <button class="btn-export" id="btn-export">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          내보내기
+        </button>
+      </div>
+    </header>
+
+    <!-- ── DASHBOARD PAGE ── -->
+    <section class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">가격 모니터링 대시보드</h1>
+          <p class="page-subtitle">Samsung.com RRP 기준가 대비 글로벌 거래선 가격 현황</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn-import" id="btn-import">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Excel 가져오기
+          </button>
+          <button class="btn-primary" id="btn-add-sku">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            SKU 추가
+          </button>
+        </div>
+      </div>
+
+      <!-- BU FILTER BAR -->
+      <div class="bu-filter-bar">
+        <div class="bu-tabs" id="bu-tabs">
+          <button class="bu-tab active" data-bu="all" id="bu-all">전체 사업부</button>
+          <button class="bu-tab" data-bu="MX" id="bu-MX">
+            <span class="bu-dot mx"></span> MX (모바일)
+          </button>
+          <button class="bu-tab" data-bu="VD" id="bu-VD">
+            <span class="bu-dot vd"></span> VD (영상)
+          </button>
+          <button class="bu-tab" data-bu="DA" id="bu-DA">
+            <span class="bu-dot da"></span> DA (생활가전)
+          </button>
+        </div>
+        <div class="subcat-chips" id="subcat-chips"></div>
+      </div>
+
+      <!-- GEO FILTER BAR -->
+      <div class="geo-filter-bar">
+        <div class="geo-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>
+          지역 필터
+        </div>
+        <div class="continent-tabs" id="continent-tabs">
+          <button class="cont-tab active" data-cont="all">전체</button>
+          <button class="cont-tab" data-cont="asia">아시아태평양</button>
+          <button class="cont-tab" data-cont="sea">동남아</button>
+          <button class="cont-tab" data-cont="americas">미주</button>
+          <button class="cont-tab" data-cont="europe">유럽</button>
+          <button class="cont-tab" data-cont="mea">MEA</button>
+        </div>
+        <select class="geo-country-select" id="geo-country-select">
+          <option value="all">모든 국가</option>
+        </select>
+      </div>
+
+      <!-- KPI CARDS -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg></div>
+          <div class="kpi-body"><div class="kpi-label">모니터링 SKU</div><div class="kpi-value" id="kpi-total-sku">0</div><div class="kpi-change neutral" id="kpi-sku-sub">전체</div></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+          <div class="kpi-body"><div class="kpi-label">가격 이탈 SKU</div><div class="kpi-value" id="kpi-alert-sku">0</div><div class="kpi-change negative" id="kpi-alert-sub">임계값 초과</div></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
+          <div class="kpi-body"><div class="kpi-label">가격 준수율</div><div class="kpi-value" id="kpi-compliance">--%</div><div class="kpi-change" id="kpi-comp-sub">전체 SKU 기준</div></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg></div>
+          <div class="kpi-body"><div class="kpi-label">모니터링 국가</div><div class="kpi-value" id="kpi-countries">0</div><div class="kpi-change neutral" id="kpi-country-sub">국가</div></div>
+        </div>
+      </div>
+
+      <!-- PRICE TABLE -->
+      <div class="card table-card">
+        <div class="card-header">
+          <h2 class="card-title">SKU별 글로벌 가격 비교</h2>
+          <div class="card-actions">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="SKU 또는 제품명 검색…" id="search-input" />
+            </div>
+            <div class="filter-tabs">
+              <button class="filter-tab active" data-filter="all">전체</button>
+              <button class="filter-tab" data-filter="alert">이탈</button>
+              <button class="filter-tab" data-filter="ok">정상</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-wrapper" id="price-table-wrapper">
+          <table class="price-table" id="price-table">
+            <thead id="price-table-head"></thead>
+            <tbody id="price-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BOTTOM GRID -->
+      <div class="bottom-grid">
+        <div class="card chart-card">
+          <div class="card-header"><h2 class="card-title">거래선별 이탈 현황</h2></div>
+          <div class="chart-container" id="bar-chart-container"></div>
+        </div>
+        <div class="card alert-card">
+          <div class="card-header">
+            <h2 class="card-title">최근 가격 알림</h2>
+            <span class="badge-count" id="alert-count">0</span>
+          </div>
+          <div class="alert-list" id="alert-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ALERTS PAGE ── -->
+    <section class="page" id="page-alerts">
+      <div class="page-header"><div><h1 class="page-title">가격 알림</h1><p class="page-subtitle">이탈 알림 규칙 및 히스토리</p></div></div>
+      <div class="alerts-page-grid">
+        <div class="card"><div class="card-header"><h2 class="card-title">알림 규칙</h2></div><div class="alert-rules" id="alert-rules"></div></div>
+        <div class="card"><div class="card-header"><h2 class="card-title">알림 히스토리</h2></div><div class="alert-history" id="alert-history"></div></div>
+      </div>
+    </section>
+
+    <!-- ── TREND PAGE ── -->
+    <section class="page" id="page-trend">
+      <div class="page-header">
+        <div><h1 class="page-title">가격 추이</h1><p class="page-subtitle">SKU별 14일 가격 추이 차트</p></div>
+        <select class="select-filter" id="trend-sku-select"><option value="">SKU 선택…</option></select>
+      </div>
+      <div class="card"><div class="card-header"><h2 class="card-title">가격 추이 차트</h2></div>
+        <div class="trend-chart-area" id="trend-chart-area">
+          <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>SKU를 선택하면 가격 추이가 표시됩니다</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── CHANNELS PAGE ── -->
+    <section class="page" id="page-channels">
+      <div class="page-header"><div><h1 class="page-title">거래선 관리</h1><p class="page-subtitle">국가별 모니터링 거래선 현황</p></div></div>
+      <div class="channel-grid" id="channel-grid"></div>
+    </section>
+
+    <!-- ── SETTINGS PAGE ── -->
+    <section class="page" id="page-settings">
+      <div class="page-header"><div><h1 class="page-title">설정</h1><p class="page-subtitle">모니터링 환경 설정</p></div></div>
+      <div class="settings-grid">
+        <div class="card settings-card">
+          <div class="card-header"><h2 class="card-title">알림 설정</h2></div>
+          <div class="settings-body">
+            <label class="settings-row"><span class="settings-label">가격 이탈 임계값 (%)</span><input type="number" class="settings-input" id="threshold-input" value="5" min="1" max="30" /></label>
+            <label class="settings-row"><span class="settings-label">자동 새로고침 (분)</span><input type="number" class="settings-input" id="refresh-interval" value="30" min="5" max="1440" /></label>
+            <label class="settings-row toggle-row"><span class="settings-label">이메일 알림</span><div class="toggle active" id="toggle-email" role="switch"></div></label>
+          </div>
+        </div>
+        <div class="card settings-card">
+          <div class="card-header"><h2 class="card-title">계정 정보</h2></div>
+          <div class="settings-body" id="account-settings-body"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ══ MODAL: SKU 추가/수정 ══ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-sku">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modal-title">SKU 추가</h3>
+      <button class="modal-close" id="modal-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group form-group--full">
+          <label class="form-label">제품명 *</label>
+          <input type="text" class="form-input" id="form-name" placeholder="예: Galaxy S25 Ultra" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">SKU 코드 *</label>
+          <input type="text" class="form-input" id="form-sku" placeholder="예: SM-S938N" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">국가 *</label>
+          <select class="form-input" id="form-country">
+            <option value="">국가 선택…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">사업부 *</label>
+          <select class="form-input" id="form-bu" onchange="updateSubcatOptions()">
+            <option value="">선택</option>
+            <option value="MX">MX (모바일)</option>
+            <option value="VD">VD (영상)</option>
+            <option value="DA">DA (생활가전)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">제품군 *</label>
+          <select class="form-input" id="form-subcat">
+            <option value="">사업부 먼저 선택</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">이탈 임계값 (%)</label>
+          <input type="number" class="form-input" id="form-threshold" value="5" min="1" max="30" />
+        </div>
+        <div class="form-group form-group--full">
+          <label class="form-label">Samsung.com URL (선택)</label>
+          <input type="url" class="form-input" id="form-url" placeholder="https://www.samsung.com/kr/smartphones/..." />
+        </div>
+      </div>
+      <div class="crawl-preview" id="crawl-preview" style="display:none">
+        <div class="cp-label">크롤링 예정 정보</div>
+        <div class="cp-row"><span>Samsung.com RRP</span><span id="cp-rrp">자동 조회됩니다</span></div>
+        <div class="cp-row"><span>Samsung.com 현재가</span><span id="cp-current">자동 조회됩니다</span></div>
+        <div class="cp-row"><span>거래선</span><span id="cp-retailers">국가 선택 후 자동 설정</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="btn-cancel">취소</button>
+      <button class="btn-primary" id="btn-save">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        저장 및 가격 조회
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: EXCEL IMPORT ══ -->
+<div class="modal-overlay" id="import-overlay">
+  <div class="modal import-modal" id="modal-import">
+    <div class="modal-header">
+      <h3 class="modal-title">Excel / CSV 가져오기</h3>
+      <button class="modal-close" id="import-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="import-template-row">
+        <span>📋 템플릿 형식: SKU코드, 제품명, 사업부(MX/VD/DA), 제품군, 국가코드</span>
+        <button class="btn-secondary" id="btn-download-template">템플릿 다운로드</button>
+      </div>
+      <div class="import-drop-zone" id="import-drop-zone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>CSV 파일을 드래그하거나 클릭하여 업로드</p>
+        <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display:none" />
+      </div>
+      <div class="import-paste-section">
+        <label class="form-label">또는 직접 붙여넣기 (CSV 형식)</label>
+        <textarea class="form-input import-textarea" id="import-textarea" placeholder="SM-S938N,Galaxy S25 Ultra,MX,smartphone,KR
+SM-S938U,Galaxy S25 Ultra,MX,smartphone,US
+QN65QN90D,QLED 4K 65inch,VD,tv,KR"></textarea>
+      </div>
+      <div class="import-preview" id="import-preview" style="display:none">
+        <div class="import-preview-header">
+          <span id="import-preview-count">0개 SKU 감지됨</span>
+          <button class="btn-secondary" id="btn-clear-import">초기화</button>
+        </div>
+        <div class="import-preview-table-wrap">
+          <table class="import-preview-table" id="import-preview-table">
+            <thead><tr><th>SKU</th><th>제품명</th><th>BU</th><th>제품군</th><th>국가</th><th>상태</th></tr></thead>
+            <tbody id="import-preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="btn-import-cancel">취소</button>
+      <button class="btn-primary" id="btn-import-confirm" disabled>
+        가져오기 및 가격 조회 시작
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CRAWLING PROGRESS MODAL ══ -->
+<div class="modal-overlay" id="crawl-overlay">
+  <div class="modal crawl-modal" id="modal-crawl">
+    <div class="modal-header" style="border-bottom:none;padding-bottom:0">
+      <h3 class="modal-title">가격 데이터 수집 중</h3>
+    </div>
+    <div class="modal-body">
+      <div class="crawl-product-info" id="crawl-product-info"></div>
+      <div class="crawl-steps" id="crawl-steps"></div>
+      <div class="crawl-disclaimer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        실제 크롤링은 백엔드 프록시 서버가 필요합니다. 현재는 시뮬레이션 데이터를 표시합니다.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
