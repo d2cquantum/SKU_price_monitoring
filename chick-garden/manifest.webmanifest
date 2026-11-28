@@ -1,0 +1,17 @@
+{
+  "name": "병아리 정원",
+  "short_name": "병아리 정원",
+  "description": "식집사를 위한 식물 관리 앱. 데이터는 이 기기에만 저장됩니다.",
+  "lang": "ko",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#DAF1DE",
+  "theme_color": "#0B2B26",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
