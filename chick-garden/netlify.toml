@@ -1,0 +1,7 @@
+# 병아리 정원 전용 Netlify 사이트 설정
+# Netlify 사이트의 Base directory = chick-garden 일 때 이 파일을 읽습니다.
+
+[build]
+  publish = "."   # chick-garden 폴더 자체를 사이트 루트(/)로 배포
+  # 이 폴더에 변경이 없으면 빌드를 건너뜀 (다른 앱만 고친 커밋은 배포 안 함)
+  ignore  = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- ."
