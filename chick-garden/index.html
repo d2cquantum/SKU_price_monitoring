@@ -2,22 +2,944 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>병아리 정원</title>
+<meta name="description" content="식집사를 위한 식물 관리 앱. 데이터는 이 기기에만 저장됩니다.">
+<meta name="theme-color" content="#fbfaf5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151713" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
-  :root { --bg:#fff; --fg:#111; --muted:#777; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; } }
-  body { margin:0; background:var(--bg); color:var(--fg);
-         font-family:system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-  main { max-width:480px; margin:0 auto; padding:32px 16px; }
-  h1 { font-size:20px; margin:0 0 8px; }
-  p { color:var(--muted); font-size:14px; margin:0; }
+  :root {
+    --bg:#fbfaf5; --surface:#ffffff; --fg:#1d1f1a; --muted:#6b6e64; --line:#e5e3da;
+    --accent:#3d7a37; --accent-ink:#ffffff; --accent-soft:#e8f1e4;
+    --chick:#f2c230; --chick-soft:#fdf4d3; --chick-ink:#5b4500;
+    --alert:#c2410c; --alert-soft:#fdeee6;
+    --radius:12px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#151713; --surface:#1d201a; --fg:#ecede6; --muted:#9a9d92; --line:#2e3229;
+      --accent:#7dc46f; --accent-ink:#10200d; --accent-soft:#223020;
+      --chick:#f2c94c; --chick-soft:#332b12; --chick-ink:#f6dc8a;
+      --alert:#f08a5d; --alert-soft:#3a2118;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#151713; --surface:#1d201a; --fg:#ecede6; --muted:#9a9d92; --line:#2e3229;
+    --accent:#7dc46f; --accent-ink:#10200d; --accent-soft:#223020;
+    --chick:#f2c94c; --chick-soft:#332b12; --chick-ink:#f6dc8a;
+    --alert:#f08a5d; --alert-soft:#3a2118;
+    color-scheme: dark;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); }
+  body {
+    font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size:15px; line-height:1.5; -webkit-tap-highlight-color:transparent;
+  }
+  button, input, select, textarea { font:inherit; color:inherit; }
+  img { display:block; }
+  #app { max-width:480px; margin:0 auto; padding:0 16px calc(84px + env(safe-area-inset-bottom)); min-height:100vh; }
+
+  header.top { position:sticky; top:0; z-index:5; background:var(--bg); padding:14px 0 10px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); margin-bottom:16px; }
+  header.top h1 { font-size:19px; margin:0; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  header.top .sub { color:var(--muted); font-size:13px; font-weight:400; margin-left:6px; }
+  .back { border:0; background:none; font-size:22px; padding:0 6px 0 0; cursor:pointer; line-height:1; }
+
+  h2 { font-size:15px; margin:24px 0 10px; display:flex; align-items:baseline; gap:8px; }
+  h2 .n { color:var(--muted); font-weight:400; font-size:13px; }
+  h2 .grow { flex:1; }
+  .muted { color:var(--muted); }
+  .small { font-size:13px; }
+  .alert { color:var(--alert); }
+  .ok { color:var(--accent); }
+
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); }
+  .list { display:flex; flex-direction:column; gap:8px; }
+  .row { display:flex; align-items:center; gap:12px; padding:12px; }
+  .row .body { flex:1; min-width:0; }
+  .card > .row + .row { border-top:1px solid var(--line); }
+  .row .title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .meta { color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  a.row, button.row { text-decoration:none; color:inherit; width:100%; text-align:left; cursor:pointer; }
+  a.row:not(.card), button.row:not(.card) { border:0; background:none; }
+  button.card.row { border:1px solid var(--line); background:var(--surface); }
+
+  .thumb { width:48px; height:48px; border-radius:10px; flex:none; object-fit:cover; background:var(--accent-soft); display:flex; align-items:center; justify-content:center; font-size:22px; overflow:hidden; }
+  .thumb img { width:100%; height:100%; object-fit:cover; }
+  .thumb.lg { width:100%; height:auto; aspect-ratio:4/3; border-radius:var(--radius); font-size:56px; }
+
+  .btn { border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:9px 14px; cursor:pointer; font-weight:600; white-space:nowrap; }
+  .btn.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .btn.chick { background:var(--chick); color:#3a2c00; border-color:var(--chick); }
+  .btn.ghost { background:none; }
+  .btn.danger { color:var(--alert); }
+  .btn.sm { padding:6px 10px; font-size:13px; border-radius:8px; }
+  .btn.block { width:100%; padding:12px; }
+  .btns { display:flex; gap:8px; flex-wrap:wrap; }
+
+  .due { font-size:12px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .due.late { background:var(--alert-soft); color:var(--alert); }
+  .due.today { background:var(--chick-soft); color:var(--chick-ink); }
+  .due.soon { background:var(--accent-soft); color:var(--accent); }
+  .due.later { color:var(--muted); }
+
+  .task { padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .task .head { display:flex; align-items:center; gap:12px; }
+  .task .acts { display:flex; gap:8px; }
+  .task .acts .btn { flex:1; }
+
+  .hero { background:var(--chick-soft); border-radius:var(--radius); padding:16px; display:flex; gap:14px; align-items:center; }
+  .hero .big { font-size:36px; line-height:1; }
+  .hero b { font-size:17px; display:block; }
+  .note { background:var(--surface); border:1px dashed var(--line); border-radius:var(--radius); padding:12px; font-size:13px; color:var(--muted); }
+  .note.warn { border-style:solid; border-color:var(--chick); background:var(--chick-soft); color:var(--chick-ink); }
+
+  .empty { text-align:center; padding:40px 16px; color:var(--muted); }
+  .empty .big { font-size:48px; }
+
+  dl.info { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin:0; padding:14px; }
+  dl.info dt { color:var(--muted); font-size:13px; }
+  dl.info dd { margin:0; word-break:break-all; }
+
+  .grid-acts { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .grid-acts button { border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:8px 2px; cursor:pointer; font-size:12px; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .grid-acts button span { font-size:20px; }
+
+  .strip { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x mandatory; }
+  .strip figure { margin:0; flex:none; width:120px; scroll-snap-align:start; }
+  .strip img { width:120px; height:120px; object-fit:cover; border-radius:10px; background:var(--accent-soft); cursor:pointer; }
+  .strip figcaption { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .tl { padding:0 12px; }
+  .tl .item { display:flex; gap:10px; padding:10px 0; border-top:1px solid var(--line); align-items:flex-start; }
+  .tl .item:first-child { border-top:0; }
+  .tl .ic { font-size:18px; width:24px; text-align:center; flex:none; }
+  .tl .body { flex:1; min-width:0; }
+  .tl .body .t { font-weight:600; }
+  .tl .body .d { color:var(--muted); font-size:12px; }
+  .tl .body p { margin:2px 0 0; white-space:pre-wrap; word-break:break-word; }
+  .tl .body img { width:96px; height:96px; object-fit:cover; border-radius:8px; margin-top:6px; cursor:pointer; }
+  .x { border:0; background:none; color:var(--muted); cursor:pointer; font-size:18px; padding:0 4px; line-height:1; }
+  .day { font-size:13px; color:var(--muted); margin:16px 0 6px; font-weight:600; }
+
+  form .f { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; }
+  form label { font-size:13px; color:var(--muted); font-weight:600; }
+  form .req::after { content:" *"; color:var(--alert); }
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    width:100%; border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:10px 12px; min-height:44px;
+  }
+  textarea { min-height:72px; resize:vertical; }
+  input:focus, select:focus, textarea:focus, .btn:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--line); background:var(--surface); border-radius:999px; padding:5px 12px; font-size:13px; cursor:pointer; }
+  .chip.on { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .check { display:flex; gap:10px; align-items:flex-start; font-size:14px; color:var(--fg); font-weight:400; cursor:pointer; }
+  .check input { width:20px; height:20px; margin:1px 0 0; accent-color:var(--accent); flex:none; }
+  .photo-pick { display:flex; gap:12px; align-items:center; }
+  .photo-pick .thumb { width:72px; height:72px; }
+  .hint { font-size:12px; color:var(--muted); }
+
+  nav.tabs { position:fixed; left:0; right:0; bottom:0; z-index:10; background:var(--surface); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  nav.tabs .in { max-width:480px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); }
+  nav.tabs button { border:0; background:none; padding:8px 0 10px; cursor:pointer; color:var(--muted); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:1px; position:relative; }
+  nav.tabs button span { font-size:20px; filter:grayscale(1); opacity:.7; }
+  nav.tabs button.on { color:var(--fg); font-weight:700; }
+  nav.tabs button.on span { filter:none; opacity:1; }
+  nav.tabs .badge { position:absolute; top:4px; left:calc(50% + 8px); background:var(--alert); color:#fff; font-size:10px; font-weight:700; border-radius:999px; min-width:16px; height:16px; line-height:16px; padding:0 4px; }
+
+  .sheet-bg { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:20; display:flex; align-items:flex-end; justify-content:center; }
+  .sheet { background:var(--bg); width:100%; max-width:480px; max-height:92vh; overflow:auto; border-radius:16px 16px 0 0; padding:16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  .sheet h3 { margin:0 0 14px; font-size:17px; display:flex; align-items:center; }
+  .sheet h3 .grow { flex:1; }
+  .viewer { position:fixed; inset:0; background:rgba(0,0,0,.9); z-index:30; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; color:#fff; }
+  .viewer img { max-width:100%; max-height:80vh; object-fit:contain; border-radius:8px; }
+
+  #toast { position:fixed; left:50%; bottom:calc(76px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:40; background:var(--fg); color:var(--bg); border-radius:10px; padding:10px 14px; font-size:14px; display:none; align-items:center; gap:14px; max-width:calc(100% - 32px); box-shadow:0 4px 16px rgba(0,0,0,.2); }
+  #toast.show { display:flex; }
+  #toast button { border:0; background:none; color:var(--chick); font-weight:700; cursor:pointer; padding:0; }
+  .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 </style>
 </head>
 <body>
-<main>
-  <h1>병아리 정원</h1>
-  <p>식집사를 위한 식물 관리 앱 — 준비 중</p>
-</main>
+<div id="app"></div>
+<nav class="tabs" aria-label="메뉴"><div class="in" id="tabs"></div></nav>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="layer"></div>
+<input type="file" id="filePhoto" accept="image/*" class="sr" tabindex="-1">
+<input type="file" id="fileBackup" accept="application/json,.json" class="sr" tabindex="-1">
+
+<script>
+(function () {
+  'use strict';
+
+  /* ───────── 상수 ───────── */
+  const KEY = 'cg-v1';
+  const LOG_TYPES = {
+    water:    { label: '물주기',   ic: '💧' },
+    check:    { label: '흙 확인',  ic: '👀' },
+    fertilize:{ label: '비료',     ic: '🧪' },
+    repot:    { label: '분갈이',   ic: '🪴' },
+    prune:    { label: '가지치기', ic: '✂️' },
+    clean:    { label: '잎 닦기',  ic: '🧽' },
+    move:     { label: '자리 이동', ic: '📦' },
+    pest:     { label: '병해충',   ic: '🐛' },
+    newleaf:  { label: '새잎',     ic: '🌿' },
+    flower:   { label: '꽃',       ic: '🌸' },
+    photo:    { label: '사진',     ic: '📷' },
+    note:     { label: '메모',     ic: '📝' },
+  };
+  const QUICK = ['water','fertilize','repot','prune','clean','move','pest','newleaf','flower','photo','note','check'];
+  const LIGHTS = ['직광', '밝은 간접광', '반그늘', '그늘'];
+  const POTS = ['토분', '플라스틱', '세라믹', '유리', '기타'];
+  const PLACES = ['거실 창가', '베란다', '침실', '주방', '욕실', '사무실'];
+  const EVERY = [3, 5, 7, 10, 14, 21, 30];
+  const WINTER = [12, 1, 2];        // 겨울철(물주기 간격을 늘리는 달)
+  const GROW = [3,4,5,6,7,8,9,10];  // 생장기(비료 알림을 보내는 달)
+
+  /* ───────── 날짜 ───────── */
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const today = () => ymd(new Date());
+  const utc = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  const diffDays = (a, b) => Math.round((utc(b) - utc(a)) / 864e5);   // b - a
+  const addDays = (s, n) => { const t = new Date(utc(s) + n * 864e5); return t.getUTCFullYear() + '-' + pad(t.getUTCMonth() + 1) + '-' + pad(t.getUTCDate()); };
+  const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const WD = ['일','월','화','수','목','금','토'];
+  const fmtDate = s => { const [y, m, d] = s.split('-').map(Number); const w = WD[new Date(y, m - 1, d).getDay()]; return (y === new Date().getFullYear() ? '' : y + '년 ') + m + '월 ' + d + '일 (' + w + ')'; };
+  const fmtShort = s => { const [, m, d] = s.split('-').map(Number); return m + '/' + d; };
+  const curMonth = () => new Date().getMonth() + 1;
+
+  /* ───────── 상태 ───────── */
+  const defaults = () => ({
+    v: 1, seq: 1, sample: false, plants: [], logs: [], lastBackup: null,
+    settings: { winter: true, winterFactor: 1.5, recheck: 2, fertGrowOnly: true, theme: 'auto' },
+  });
+  let S = load();
+  const ui = { tab: 'today', plant: null, edit: null, logType: '', logPlant: '' };
+  let draft = null;   // 등록/수정 폼의 사진 등 임시 값
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        const d = defaults();
+        return Object.assign(d, s, { settings: Object.assign(d.settings, s.settings || {}) });
+      }
+    } catch (e) { console.warn('load failed', e); }
+    return defaults();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); }
+    catch (e) { toast('저장 공간이 부족해요. 설정에서 백업 후 정리해 주세요.'); }
+    updateBadge();
+  }
+  const nid = p => p + (S.seq++).toString(36) + Date.now().toString(36).slice(-4);
+  const plantById = id => S.plants.find(p => p.id === id);
+
+  /* ───────── 사진 저장소 (IndexedDB) ───────── */
+  const PH = new Map();   // 메모리 캐시: id → dataURL
+  let dbp = null;
+  function db() {
+    if (!dbp) dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('cg-photos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('photos');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    return dbp;
+  }
+  async function idb(mode, fn) {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const tx = d.transaction('photos', mode);
+      const req = fn(tx.objectStore('photos'));
+      tx.oncomplete = () => res(req && req.result);
+      tx.onerror = () => rej(tx.error);
+    });
+  }
+  const photoPut = (id, data) => { PH.set(id, data); return idb('readwrite', s => s.put(data, id)); };
+  const photoDel = id => { PH.delete(id); return idb('readwrite', s => s.delete(id)).catch(() => {}); };
+  async function photoGet(id) {
+    if (PH.has(id)) return PH.get(id);
+    const v = await idb('readonly', s => s.get(id)).catch(() => null);
+    if (v) PH.set(id, v);
+    return v;
+  }
+  async function photoAll() {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const out = {}; const tx = d.transaction('photos', 'readonly');
+      tx.objectStore('photos').openCursor().onsuccess = e => { const c = e.target.result; if (c) { out[c.key] = c.value; c.continue(); } };
+      tx.oncomplete = () => res(out); tx.onerror = () => rej(tx.error);
+    });
+  }
+  async function photoClear() { PH.clear(); await idb('readwrite', s => s.clear()).catch(() => {}); }
+
+  // 사진을 긴 변 1000px JPEG로 줄여서 저장 (용량 절약)
+  function compress(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const max = 1000, k = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        res(c.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('이미지를 읽지 못했어요')); };
+      img.src = url;
+    });
+  }
+  function fillPhotos(root) {
+    root.querySelectorAll('img[data-ph]').forEach(async el => {
+      const v = await photoGet(el.dataset.ph);
+      if (v) el.src = v; else el.remove();
+    });
+  }
+
+  /* ───────── 계산 ───────── */
+  const logsOf = (pid, type) => S.logs.filter(l => l.plantId === pid && (!type || l.type === type));
+  function lastLog(pid, type) {
+    let best = null;
+    for (const l of S.logs) if (l.plantId === pid && l.type === type && (!best || l.date > best.date || (l.date === best.date && l.at > best.at))) best = l;
+    return best;
+  }
+  const isWinter = () => S.settings.winter && WINTER.includes(curMonth());
+  function waterEvery(p) {
+    const n = Math.max(1, Number(p.waterEvery) || 7);
+    return isWinter() ? Math.round(n * (Number(S.settings.winterFactor) || 1.5)) : n;
+  }
+  // 다음 물주기(또는 흙 확인) 날짜
+  function waterInfo(p, t = today()) {
+    const every = waterEvery(p);
+    const w = lastLog(p.id, 'water');
+    const base = w ? w.date : (p.created || t);
+    let due = addDays(base, every);
+    const c = lastLog(p.id, 'check');
+    if (c && (!w || c.date >= w.date)) { const re = addDays(c.date, Number(S.settings.recheck) || 2); if (re > due) due = re; }
+    return { every, last: w && w.date, due, left: diffDays(t, due), snoozed: !!(c && (!w || c.date >= w.date)) };
+  }
+  function fertInfo(p, t = today()) {
+    const n = Number(p.fertEvery) || 0;
+    if (!n) return null;
+    const f = lastLog(p.id, 'fertilize');
+    const due = addDays(f ? f.date : (p.created || t), n);
+    const paused = S.settings.fertGrowOnly && !GROW.includes(curMonth());
+    return { every: n, last: f && f.date, due, left: diffDays(t, due), paused };
+  }
+  function dueLabel(left) {
+    if (left < 0) return { cls: 'late', txt: -left + '일 지남' };
+    if (left === 0) return { cls: 'today', txt: '오늘' };
+    if (left === 1) return { cls: 'soon', txt: '내일' };
+    if (left <= 3) return { cls: 'soon', txt: left + '일 뒤' };
+    return { cls: 'later', txt: left + '일 뒤' };
+  }
+  const active = () => S.plants.filter(p => !p.archived);
+  const waterDue = () => active().map(p => ({ p, w: waterInfo(p) })).filter(x => x.w.left <= 0).sort((a, b) => a.w.left - b.w.left);
+  const fertDue = () => active().map(p => ({ p, f: fertInfo(p) })).filter(x => x.f && !x.f.paused && x.f.left <= 0);
+  const dueCount = () => waterDue().length + fertDue().length;
+
+  function updateBadge() {
+    try {
+      const n = dueCount();
+      if ('setAppBadge' in navigator) n ? navigator.setAppBadge(n).catch(() => {}) : navigator.clearAppBadge().catch(() => {});
+    } catch (e) {}
+  }
+
+  /* ───────── 기록 추가·삭제 ───────── */
+  function addLog(plantId, type, extra = {}) {
+    const l = Object.assign({ id: nid('l'), plantId, type, date: today(), note: '', at: Date.now() }, extra);
+    S.logs.push(l);
+    return l;
+  }
+  function removeLogs(ids) {
+    const set = new Set(ids);
+    const pics = S.logs.filter(l => set.has(l.id) && l.photo).map(l => l.photo);
+    S.logs = S.logs.filter(l => !set.has(l.id));
+    pics.forEach(dropPhotoIfUnused);
+  }
+  // 어떤 식물·기록도 쓰지 않는 사진만 지움 (대표 사진과 성장 기록이 같은 사진을 공유)
+  function dropPhotoIfUnused(id) {
+    if (!id) return;
+    if (S.plants.some(p => p.photo === id) || S.logs.some(l => l.photo === id)) return;
+    photoDel(id);
+  }
+
+  /* ───────── 유틸 ───────── */
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const $ = (sel, r = document) => r.querySelector(sel);
+  const won = n => Number(n).toLocaleString('ko-KR') + '원';
+  function thumb(p, cls = '') {
+    return '<div class="thumb ' + cls + '">' + (p.photo ? '<img alt="" data-ph="' + esc(p.photo) + '">' : '🌱') + '</div>';
+  }
+  let toastTimer = null;
+  function toast(msg, undo) {
+    const t = $('#toast');
+    t.innerHTML = '<span>' + esc(msg) + '</span>' + (undo ? '<button type="button" id="toastUndo">되돌리기</button>' : '');
+    t.classList.add('show');
+    if (undo) $('#toastUndo').onclick = () => { undo(); t.classList.remove('show'); };
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), undo ? 5000 : 2500);
+  }
+  function applyTheme() {
+    const th = S.settings.theme;
+    if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
+    else delete document.documentElement.dataset.theme;
+  }
+
+  /* ───────── 화면 ───────── */
+  function render() {
+    applyTheme();
+    const app = $('#app');
+    let html;
+    if (ui.edit) html = editView();
+    else if (ui.plant && plantById(ui.plant)) html = plantView(plantById(ui.plant));
+    else { ui.plant = null; html = ({ today: todayView, plants: plantsView, logs: logsView, settings: settingsView }[ui.tab] || todayView)(); }
+    app.innerHTML = html;
+    renderTabs();
+    fillPhotos(app);
+  }
+  function renderTabs() {
+    const n = dueCount();
+    const tabs = [['today', '🐣', '오늘'], ['plants', '🪴', '식물'], ['logs', '📒', '기록'], ['settings', '⚙️', '설정']];
+    $('#tabs').innerHTML = tabs.map(([id, ic, label]) =>
+      '<button type="button" data-act="tab" data-id="' + id + '" class="' + (ui.tab === id && !ui.edit && !ui.plant ? 'on' : '') + '"' + (ui.tab === id ? ' aria-current="page"' : '') + '>' +
+      '<span aria-hidden="true">' + ic + '</span>' + label +
+      (id === 'today' && n ? '<i class="badge">' + n + '</i>' : '') + '</button>').join('');
+  }
+  const header = (title, sub, back) =>
+    '<header class="top">' + (back ? '<button type="button" class="back" data-act="back" aria-label="뒤로">‹</button>' : '') +
+    '<h1>' + esc(title) + (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') + '</h1></header>';
+
+  /* 오늘 */
+  function todayView() {
+    const t = today();
+    let h = header('병아리 정원', fmtDate(t));
+    const plants = active();
+    if (!plants.length) {
+      return h + '<div class="empty"><div class="big">🐣</div><p><b>아직 정원이 비어 있어요</b><br>첫 식물을 등록하면 물 줄 날을 챙겨 드릴게요.</p>' +
+        '<div class="btns" style="justify-content:center"><button type="button" class="btn primary" data-act="new">+ 첫 식물 등록</button>' +
+        '<button type="button" class="btn" data-act="sample">예시로 둘러보기</button></div></div>';
+    }
+    const wd = waterDue(), fd = fertDue();
+    const total = wd.length + fd.length;
+    h += '<div class="hero"><div class="big" aria-hidden="true">' + (total ? '🐥' : '🌤️') + '</div><div>' +
+      (total ? '<b>오늘 돌볼 식물 ' + total + '건</b><span class="small muted">하나씩 확인하고 기록해 주세요.</span>'
+             : '<b>오늘은 쉬어도 돼요</b><span class="small muted">돌봐야 할 식물이 없어요.</span>') + '</div></div>';
+    if (isWinter()) h += '<p class="note" style="margin-top:10px">❄️ 겨울철이라 물주기 간격을 ' + S.settings.winterFactor + '배로 늘려 계산하고 있어요. (설정에서 변경)</p>';
+    if (S.sample) h += '<p class="note warn" style="margin-top:10px">예시 식물을 보고 있어요. <button type="button" class="btn sm" data-act="clearSample">예시 지우고 시작</button></p>';
+    else if (needBackup()) h += '<p class="note warn" style="margin-top:10px">💾 ' + (S.lastBackup ? '마지막 백업이 ' + diffDays(S.lastBackup.slice(0, 10), t) + '일 전이에요.' : '아직 백업한 적이 없어요.') + ' 휴대폰을 바꾸거나 브라우저 데이터를 지우면 기록이 사라져요. <button type="button" class="btn sm" data-act="export">지금 백업</button></p>';
+
+    h += '<h2>💧 물 줄 차례<span class="n">' + wd.length + '</span><span class="grow"></span>' +
+      (wd.length > 1 ? '<button type="button" class="btn sm" data-act="waterAll">모두 물 줬어요</button>' : '') + '</h2>';
+    if (!wd.length) h += '<p class="muted small">물 줄 식물이 없어요.</p>';
+    else h += '<div class="list">' + wd.map(({ p, w }) => {
+      const dl = dueLabel(w.left);
+      const ask = p.checkMode ? '흙이 말랐는지 손가락으로 확인해 보세요' : (w.snoozed ? '다시 확인할 날이에요' : (w.every + '일마다'));
+      return '<div class="card task"><div class="head"><button type="button" class="row" style="padding:0" data-act="open" data-id="' + p.id + '">' + thumb(p) +
+        '<div class="body"><div class="title">' + esc(p.name) + '</div><div class="meta">' + esc([p.location, ask].filter(Boolean).join(' · ')) + '</div></div></button>' +
+        '<span class="due ' + dl.cls + '">' + dl.txt + '</span></div>' +
+        '<div class="acts"><button type="button" class="btn primary" data-act="water" data-id="' + p.id + '">💧 물 줬어요</button>' +
+        '<button type="button" class="btn" data-act="snooze" data-id="' + p.id + '">아직 촉촉해요</button></div></div>';
+    }).join('') + '</div>';
+
+    if (fd.length) {
+      h += '<h2>🧪 비료 줄 차례<span class="n">' + fd.length + '</span></h2><div class="list">' + fd.map(({ p, f }) => {
+        const dl = dueLabel(f.left);
+        return '<div class="card task"><div class="head"><button type="button" class="row" style="padding:0" data-act="open" data-id="' + p.id + '">' + thumb(p) +
+          '<div class="body"><div class="title">' + esc(p.name) + '</div><div class="meta">' + f.every + '일마다 · 마지막 ' + (f.last ? fmtShort(f.last) : '기록 없음') + '</div></div></button>' +
+          '<span class="due ' + dl.cls + '">' + dl.txt + '</span></div>' +
+          '<div class="acts"><button type="button" class="btn chick" data-act="fert" data-id="' + p.id + '">🧪 비료 줬어요</button>' +
+          '<button type="button" class="btn" data-act="fertSkip" data-id="' + p.id + '">이번엔 건너뛰기</button></div></div>';
+      }).join('') + '</div>';
+    }
+
+    const soon = plants.map(p => ({ p, w: waterInfo(p) })).filter(x => x.w.left > 0 && x.w.left <= 7).sort((a, b) => a.w.left - b.w.left);
+    h += '<h2>📅 다가오는 7일<span class="n">' + soon.length + '</span></h2>';
+    if (!soon.length) h += '<p class="muted small">일주일 안에 물 줄 식물이 없어요.</p>';
+    else h += '<div class="card">' + soon.map(({ p, w }) => {
+      const dl = dueLabel(w.left);
+      return '<button type="button" class="row" data-act="open" data-id="' + p.id + '">' + thumb(p) +
+        '<div class="body"><div class="title">' + esc(p.name) + '</div><div class="meta">' + fmtDate(w.due) + (p.checkMode ? ' · 흙 확인' : '') + '</div></div><span class="due ' + dl.cls + '">' + dl.txt + '</span></button>';
+    }).join('') + '</div>';
+
+    const recent = S.logs.filter(l => ['newleaf', 'flower'].includes(l.type) && diffDays(l.date, t) <= 30).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+    if (recent.length) h += '<h2>✨ 최근 좋은 소식</h2><div class="card tl">' + recent.map(logItem).join('') + '</div>';
+    return h;
+  }
+  function needBackup() {
+    if (!S.logs.length && S.plants.length < 2) return false;
+    return !S.lastBackup || diffDays(S.lastBackup.slice(0, 10), today()) >= 30;
+  }
+
+  /* 식물 목록 */
+  function plantsView() {
+    let h = header('내 식물', active().length + '개');
+    h += '<button type="button" class="btn primary block" data-act="new">+ 식물 등록</button>';
+    const list = active().map(p => ({ p, w: waterInfo(p) }));
+    if (!list.length) return h + '<div class="empty"><div class="big">🪴</div><p>등록된 식물이 없어요.</p><button type="button" class="btn" data-act="sample">예시로 둘러보기</button></div>';
+    const groups = {};
+    list.forEach(x => { const k = x.p.location || '자리 미정'; (groups[k] = groups[k] || []).push(x); });
+    Object.keys(groups).sort((a, b) => a === '자리 미정' ? 1 : b === '자리 미정' ? -1 : a.localeCompare(b, 'ko')).forEach(k => {
+      const g = groups[k].sort((a, b) => a.w.left - b.w.left);
+      h += '<h2>' + esc(k) + '<span class="n">' + g.length + '</span></h2><div class="list">' + g.map(({ p, w }) => {
+        const dl = dueLabel(w.left);
+        return '<button type="button" class="card row" data-act="open" data-id="' + p.id + '">' + thumb(p) +
+          '<div class="body"><div class="title">' + esc(p.name) + '</div><div class="meta">' + esc([p.species, p.light].filter(Boolean).join(' · ') || '정보 없음') + '</div></div>' +
+          '<span class="due ' + dl.cls + '" title="다음 물주기">💧 ' + dl.txt + '</span></button>';
+      }).join('') + '</div>';
+    });
+    const arch = S.plants.filter(p => p.archived);
+    if (arch.length) h += '<h2 class="muted">🌫️ 보관한 식물<span class="n">' + arch.length + '</span></h2><div class="list">' +
+      arch.map(p => '<button type="button" class="card row" data-act="open" data-id="' + p.id + '">' + thumb(p) + '<div class="body"><div class="title muted">' + esc(p.name) + '</div><div class="meta">' + esc(p.archivedNote || '보관함') + '</div></div></button>').join('') + '</div>';
+    return h;
+  }
+
+  /* 식물 상세 */
+  function plantView(p) {
+    const t = today();
+    const w = waterInfo(p), f = fertInfo(p);
+    let h = header(p.name, p.species, true);
+    h += thumb(p, 'lg');
+    const days = p.acquired ? diffDays(p.acquired, t) : null;
+    const leaves = logsOf(p.id, 'newleaf').reduce((n, l) => n + (l.count || 1), 0), flowers = logsOf(p.id, 'flower').length;
+    h += '<p class="small muted" style="margin:10px 0 0">' + [days != null && days >= 0 ? '함께한 지 ' + (days + 1) + '일' : '', leaves ? '새잎 ' + leaves + '장' : '', flowers ? '꽃 ' + flowers + '번' : '', '기록 ' + logsOf(p.id).length + '건'].filter(Boolean).join(' · ') + '</p>';
+
+    if (p.archived) h += '<p class="note warn" style="margin-top:10px">보관한 식물이에요. 알림에서 빠집니다. <button type="button" class="btn sm" data-act="unarchive" data-id="' + p.id + '">다시 키우기</button></p>';
+    else {
+      const dl = dueLabel(w.left);
+      h += '<h2>돌봄 일정</h2><div class="card"><dl class="info">' +
+        '<dt>💧 물주기</dt><dd><span class="due ' + dl.cls + '">' + dl.txt + '</span> ' + fmtShort(w.due) + (p.checkMode ? ' 흙 확인' : '') + '<br><span class="small muted">' + w.every + '일마다' + (isWinter() ? ' (겨울 조정)' : '') + ' · 마지막 ' + (w.last ? fmtDate(w.last) : '기록 없음') + '</span></dd>' +
+        (f ? '<dt>🧪 비료</dt><dd>' + (f.paused ? '<span class="muted">생장기(3~10월)에 다시 알려요</span>' : '<span class="due ' + dueLabel(f.left).cls + '">' + dueLabel(f.left).txt + '</span> ' + fmtShort(f.due)) + '<br><span class="small muted">' + f.every + '일마다 · 마지막 ' + (f.last ? fmtDate(f.last) : '기록 없음') + '</span></dd>' : '') +
+        (() => { const r = lastLog(p.id, 'repot'); return '<dt>🪴 분갈이</dt><dd>' + (r ? fmtDate(r.date) + ' <span class="small muted">(' + Math.floor(diffDays(r.date, t) / 30) + '개월 전)</span>' : '<span class="muted">기록 없음</span>') + '</dd>'; })() +
+        '</dl></div>';
+    }
+
+    h += '<h2>기록하기</h2><div class="grid-acts">' + QUICK.map(k => '<button type="button" data-act="log" data-type="' + k + '" data-id="' + p.id + '"><span aria-hidden="true">' + LOG_TYPES[k].ic + '</span>' + LOG_TYPES[k].label + '</button>').join('') + '</div>';
+
+    const pics = logsOf(p.id).filter(l => l.photo).sort((a, b) => a.date.localeCompare(b.date) || a.at - b.at);
+    if (pics.length) h += '<h2>📷 성장 사진<span class="n">' + pics.length + '</span></h2><div class="strip">' + pics.map(l => '<figure><img alt="' + esc(fmtDate(l.date)) + ' 사진" data-ph="' + esc(l.photo) + '" data-act="view" data-ph-id="' + esc(l.photo) + '" data-cap="' + esc(fmtDate(l.date) + ' · ' + LOG_TYPES[l.type].label) + '"><figcaption>' + fmtShort(l.date) + ' · ' + esc(LOG_TYPES[l.type].label) + '</figcaption></figure>').join('') + '</div>';
+
+    const info = [['위치', p.location], ['햇빛', p.light], ['화분', [p.potMaterial, p.potSize].filter(Boolean).join(' · ')], ['흙', p.soil], ['들인 날', p.acquired && fmtDate(p.acquired)], ['구입처', p.source], ['가격', p.price ? won(p.price) : '']].filter(x => x[1]);
+    h += '<h2>정보<span class="grow"></span><button type="button" class="btn sm" data-act="edit" data-id="' + p.id + '">수정</button></h2>';
+    h += '<div class="card">' + (info.length ? '<dl class="info">' + info.map(([k, v]) => '<dt>' + k + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '<p class="muted small" style="padding:12px;margin:0">등록된 정보가 없어요.</p>') +
+      (p.memo ? '<p style="padding:0 14px 14px;margin:0;white-space:pre-wrap">' + esc(p.memo) + '</p>' : '') + '</div>';
+
+    const logs = logsOf(p.id).sort((a, b) => b.date.localeCompare(a.date) || b.at - a.at);
+    h += '<h2>관리 일지<span class="n">' + logs.length + '</span></h2>';
+    h += logs.length ? '<div class="card tl">' + logs.map(l => logItem(l, true)).join('') + '</div>' : '<p class="muted small">아직 기록이 없어요.</p>';
+
+    h += '<div class="btns" style="margin-top:24px">' +
+      (p.archived ? '' : '<button type="button" class="btn" data-act="archive" data-id="' + p.id + '">보관하기</button>') +
+      '<button type="button" class="btn danger" data-act="delPlant" data-id="' + p.id + '">삭제</button></div>' +
+      '<p class="hint">보관: 떠나보낸 식물이나 나눔한 식물을 기록은 남긴 채 알림에서 뺍니다.</p>';
+    return h;
+  }
+  function logItem(l, hidePlant) {
+    const tp = LOG_TYPES[l.type] || LOG_TYPES.note;
+    const p = plantById(l.plantId);
+    return '<div class="item"><div class="ic" aria-hidden="true">' + tp.ic + '</div><div class="body">' +
+      '<div class="t">' + (hidePlant || !p ? '' : '<a href="#" data-act="open" data-id="' + esc(l.plantId) + '" style="color:inherit">' + esc(p.name) + '</a> · ') + tp.label + (l.count ? ' ' + l.count + '장' : '') + '</div>' +
+      '<div class="d">' + fmtDate(l.date) + '</div>' +
+      (l.note ? '<p>' + esc(l.note) + '</p>' : '') +
+      (l.photo ? '<img alt="기록 사진" data-ph="' + esc(l.photo) + '" data-act="view" data-ph-id="' + esc(l.photo) + '" data-cap="' + esc(fmtDate(l.date)) + '">' : '') +
+      '</div><button type="button" class="x" data-act="delLog" data-id="' + l.id + '" aria-label="기록 삭제">×</button></div>';
+  }
+
+  /* 등록·수정 */
+  function editView() {
+    const isNew = ui.edit === 'new';
+    const p = isNew ? {} : plantById(ui.edit) || {};
+    if (!draft) draft = { photo: p.photo || null, newPhoto: null, every: p.waterEvery || 7 };
+    const locs = [...new Set(PLACES.concat(S.plants.map(x => x.location).filter(Boolean)))];
+    const opt = (list, cur) => '<option value="">선택 안 함</option>' + list.map(v => '<option' + (v === cur ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
+    const ph = draft.newPhoto || (draft.photo && PH.get(draft.photo));
+    let h = header(isNew ? '식물 등록' : '식물 정보 수정', '', true);
+    h += '<form id="plantForm" autocomplete="off">' +
+      '<div class="f"><label>사진</label><div class="photo-pick"><div class="thumb">' + (ph ? '<img alt="" src="' + ph + '">' : (draft.photo ? '<img alt="" data-ph="' + esc(draft.photo) + '">' : '🌱')) + '</div>' +
+        '<div class="btns"><button type="button" class="btn sm" data-act="pickPhoto" data-for="plant">' + (ph || draft.photo ? '사진 바꾸기' : '사진 고르기') + '</button>' +
+        (ph || draft.photo ? '<button type="button" class="btn sm ghost" data-act="dropPhoto">빼기</button>' : '') + '</div></div></div>' +
+      '<div class="f"><label class="req" for="fName">이름 (애칭)</label><input type="text" id="fName" name="name" required maxlength="40" placeholder="예: 몬순이" value="' + esc(p.name) + '"></div>' +
+      '<div class="f"><label for="fSpecies">품종</label><input type="text" id="fSpecies" name="species" maxlength="60" placeholder="예: 몬스테라 델리시오사" value="' + esc(p.species) + '"></div>' +
+      '<div class="two"><div class="f"><label for="fLoc">놓인 자리</label><input type="text" id="fLoc" name="location" list="locList" maxlength="30" placeholder="거실 창가" value="' + esc(p.location) + '"><datalist id="locList">' + locs.map(v => '<option value="' + esc(v) + '">').join('') + '</datalist></div>' +
+      '<div class="f"><label for="fLight">햇빛</label><select id="fLight" name="light">' + opt(LIGHTS, p.light) + '</select></div></div>' +
+      '<div class="f"><label for="fEvery" class="req">물주기 간격 (일)</label><input type="number" id="fEvery" name="waterEvery" min="1" max="120" required inputmode="numeric" value="' + esc(draft.every) + '">' +
+        '<div class="chips" role="group" aria-label="자주 쓰는 간격">' + EVERY.map(n => '<button type="button" class="chip' + (Number(draft.every) === n ? ' on' : '') + '" data-act="every" data-n="' + n + '">' + n + '일</button>').join('') + '</div></div>' +
+      '<div class="f"><label class="check"><input type="checkbox" name="checkMode"' + (p.checkMode ? ' checked' : '') + '><span><b>흙 확인 후 물주기</b><br><span class="hint">날짜가 되면 "물 주세요" 대신 "흙 확인해 보세요"로 알려요. 다육·선인장처럼 과습에 약한 식물에 추천해요.</span></span></label></div>' +
+      (isNew ? '<div class="f"><label for="fLastW">마지막으로 물 준 날</label><input type="date" id="fLastW" name="lastWater" max="' + today() + '" value="' + today() + '"><span class="hint">모르면 비워 두세요. 등록일 기준으로 계산해요.</span></div>' : '') +
+      '<div class="f"><label for="fFert">비료 주기 (일, 0이면 알림 없음)</label><input type="number" id="fFert" name="fertEvery" min="0" max="365" inputmode="numeric" value="' + esc(p.fertEvery || 0) + '"></div>' +
+      '<div class="two"><div class="f"><label for="fPot">화분 재질</label><select id="fPot" name="potMaterial">' + opt(POTS, p.potMaterial) + '</select></div>' +
+      '<div class="f"><label for="fPotSize">화분 크기</label><input type="text" id="fPotSize" name="potSize" maxlength="20" placeholder="예: 지름 15cm" value="' + esc(p.potSize) + '"></div></div>' +
+      '<div class="f"><label for="fSoil">흙</label><input type="text" id="fSoil" name="soil" maxlength="60" placeholder="예: 상토 6 : 펄라이트 4" value="' + esc(p.soil) + '"></div>' +
+      '<div class="two"><div class="f"><label for="fAcq">들인 날</label><input type="date" id="fAcq" name="acquired" max="' + today() + '" value="' + esc(p.acquired || (isNew ? today() : '')) + '"></div>' +
+      '<div class="f"><label for="fPrice">가격 (원)</label><input type="number" id="fPrice" name="price" min="0" inputmode="numeric" value="' + esc(p.price || '') + '"></div></div>' +
+      '<div class="f"><label for="fSrc">구입처</label><input type="text" id="fSrc" name="source" maxlength="40" placeholder="예: 동네 화원, 나눔" value="' + esc(p.source) + '"></div>' +
+      '<div class="f"><label for="fMemo">메모</label><textarea id="fMemo" name="memo" maxlength="1000" placeholder="관리 요령, 특이사항">' + esc(p.memo) + '</textarea></div>' +
+      '<button type="submit" class="btn primary block">' + (isNew ? '등록하기' : '저장하기') + '</button></form>';
+    return h;
+  }
+
+  /* 기록 */
+  function logsView() {
+    let h = header('기록', S.logs.length + '건');
+    h += '<button type="button" class="btn primary block" data-act="logPick"' + (active().length ? '' : ' disabled') + '>+ 기록 추가</button>';
+    h += '<div class="two" style="margin-top:12px"><select id="logType" aria-label="종류">' + '<option value="">모든 종류</option>' + Object.keys(LOG_TYPES).map(k => '<option value="' + k + '"' + (ui.logType === k ? ' selected' : '') + '>' + LOG_TYPES[k].ic + ' ' + LOG_TYPES[k].label + '</option>').join('') + '</select>' +
+      '<select id="logPlant" aria-label="식물"><option value="">모든 식물</option>' + S.plants.map(p => '<option value="' + p.id + '"' + (ui.logPlant === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select></div>';
+    const list = S.logs.filter(l => (!ui.logType || l.type === ui.logType) && (!ui.logPlant || l.plantId === ui.logPlant)).sort((a, b) => b.date.localeCompare(a.date) || b.at - a.at);
+    if (!list.length) return h + '<div class="empty"><div class="big">📒</div><p>' + (S.logs.length ? '조건에 맞는 기록이 없어요.' : '물을 주거나 새잎이 나면 기록해 보세요.') + '</p></div>';
+    let cur = '', out = '';
+    list.slice(0, 300).forEach(l => {
+      if (l.date !== cur) { if (cur) out += '</div>'; cur = l.date; out += '<div class="day">' + fmtDate(l.date) + '</div><div class="card tl">'; }
+      out += logItem(l).replace(/<div class="d">[^<]*<\/div>/, '');
+    });
+    out += '</div>';
+    if (list.length > 300) out += '<p class="hint">최근 300건만 보여요. 종류나 식물로 좁혀 보세요.</p>';
+    return h + out;
+  }
+
+  /* 설정 */
+  function settingsView() {
+    const st = S.settings;
+    let h = header('설정');
+    h += '<h2>💾 백업</h2><div class="card" style="padding:14px">' +
+      '<p class="small" style="margin:0 0 10px">모든 기록과 사진은 <b>이 휴대폰의 브라우저 안에만</b> 저장돼요. 서버로 보내지 않아요. 휴대폰을 바꾸거나 브라우저 데이터를 지우기 전에 백업 파일을 만들어 두세요.</p>' +
+      '<p class="small muted" style="margin:0 0 10px">마지막 백업: ' + (S.lastBackup ? fmtDate(S.lastBackup.slice(0, 10)) : '없음') + ' · <span id="usage">용량 계산 중…</span></p>' +
+      '<div class="btns"><button type="button" class="btn primary" data-act="export">백업 파일 만들기</button><button type="button" class="btn" data-act="import">백업 불러오기</button></div></div>';
+    h += '<h2>🗓️ 물주기 계산</h2><div class="card" style="padding:14px"><form id="setForm">' +
+      '<div class="f"><label class="check"><input type="checkbox" name="winter"' + (st.winter ? ' checked' : '') + '><span><b>겨울(12~2월)에는 간격 늘리기</b><br><span class="hint">추우면 흙이 천천히 말라요.</span></span></label></div>' +
+      '<div class="two"><div class="f"><label for="sFactor">겨울 배수</label><select id="sFactor" name="winterFactor">' + [1.25, 1.5, 2].map(v => '<option value="' + v + '"' + (Number(st.winterFactor) === v ? ' selected' : '') + '>' + v + '배</option>').join('') + '</select></div>' +
+      '<div class="f"><label for="sRecheck">"아직 촉촉해요" 후 다시 확인</label><select id="sRecheck" name="recheck">' + [1, 2, 3, 5].map(v => '<option value="' + v + '"' + (Number(st.recheck) === v ? ' selected' : '') + '>' + v + '일 뒤</option>').join('') + '</select></div></div>' +
+      '<div class="f" style="margin:0"><label class="check"><input type="checkbox" name="fertGrowOnly"' + (st.fertGrowOnly ? ' checked' : '') + '><span><b>비료 알림은 생장기(3~10월)에만</b></span></label></div>' +
+      '</form></div>';
+    h += '<h2>🎨 화면</h2><div class="chips" role="group" aria-label="테마">' + [['auto', '기기 설정 따르기'], ['light', '밝게'], ['dark', '어둡게']].map(([v, l]) => '<button type="button" class="chip' + (st.theme === v ? ' on' : '') + '" data-act="theme" data-v="' + v + '">' + l + '</button>').join('') + '</div>';
+    h += '<h2>📱 앱으로 설치</h2><p class="small muted" style="margin:0">크롬 메뉴(⋮) → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b>를 누르면 아이콘으로 바로 열 수 있고 인터넷 없이도 쓸 수 있어요. 아이폰은 사파리 공유 버튼 → 홈 화면에 추가.<br>알림은 앱을 열었을 때 "오늘" 화면과 아이콘 숫자 배지로 보여 드려요.</p>';
+    h += '<h2>데이터</h2><div class="btns">' + (S.plants.length ? '' : '<button type="button" class="btn" data-act="sample">예시 식물 넣기</button>') +
+      '<button type="button" class="btn danger" data-act="reset">모든 데이터 지우기</button></div>';
+    h += '<p class="hint" style="margin-top:24px">병아리 정원 · 데이터 버전 ' + S.v + '</p>';
+    setTimeout(showUsage, 0);
+    return h;
+  }
+  async function showUsage() {
+    const el = $('#usage'); if (!el) return;
+    try {
+      const e = await navigator.storage.estimate();
+      el.textContent = '사용 중 ' + (e.usage / 1048576).toFixed(1) + 'MB';
+    } catch (e) { el.textContent = '식물 ' + S.plants.length + '개 · 기록 ' + S.logs.length + '건'; }
+  }
+
+  /* ───────── 기록 시트 ───────── */
+  let sheet = null;   // { plantId, type, date, note, count, photo }
+  function openLogSheet(plantId, type) {
+    sheet = { plantId: plantId || (active()[0] || {}).id, type: type || 'water', date: today(), note: '', count: '', photo: null };
+    renderSheet();
+    if (type === 'photo') setTimeout(() => pickPhoto('log'), 50);
+  }
+  function renderSheet() {
+    if (!sheet) { $('#layer').innerHTML = ''; return; }
+    const tp = LOG_TYPES[sheet.type];
+    $('#layer').innerHTML = '<div class="sheet-bg" data-act="closeSheet"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">' +
+      '<h3 id="shTitle"><span class="grow">' + tp.ic + ' ' + tp.label + ' 기록</span><button type="button" class="x" data-act="closeSheet" aria-label="닫기">×</button></h3>' +
+      '<form id="logForm">' +
+      '<div class="f"><label for="lPlant">식물</label><select id="lPlant" name="plantId">' + active().map(p => '<option value="' + p.id + '"' + (p.id === sheet.plantId ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select></div>' +
+      '<div class="f"><label for="lType">종류</label><select id="lType" name="type">' + Object.keys(LOG_TYPES).map(k => '<option value="' + k + '"' + (k === sheet.type ? ' selected' : '') + '>' + LOG_TYPES[k].ic + ' ' + LOG_TYPES[k].label + '</option>').join('') + '</select></div>' +
+      '<div class="two"><div class="f"><label for="lDate">날짜</label><input type="date" id="lDate" name="date" max="' + today() + '" value="' + sheet.date + '"></div>' +
+      (sheet.type === 'newleaf' ? '<div class="f"><label for="lCount">몇 장?</label><input type="number" id="lCount" name="count" min="1" max="99" inputmode="numeric" value="' + esc(sheet.count) + '" placeholder="1"></div>' : '<div></div>') + '</div>' +
+      '<div class="f"><label for="lNote">메모</label><textarea id="lNote" name="note" maxlength="1000" placeholder="' + esc(notePh(sheet.type)) + '">' + esc(sheet.note) + '</textarea></div>' +
+      '<div class="f"><label>사진</label><div class="photo-pick"><div class="thumb">' + (sheet.photo ? '<img alt="" src="' + sheet.photo + '">' : '📷') + '</div>' +
+      '<div class="btns"><button type="button" class="btn sm" data-act="pickPhoto" data-for="log">' + (sheet.photo ? '바꾸기' : '사진 추가') + '</button>' + (sheet.photo ? '<button type="button" class="btn sm ghost" data-act="dropLogPhoto">빼기</button>' : '') + '</div></div></div>' +
+      '<button type="submit" class="btn primary block">기록하기</button></form></div></div>';
+  }
+  function notePh(type) {
+    return ({ water: '예: 저면관수 20분', fertilize: '예: 하이포넥스 1000배', repot: '예: 15cm → 18cm, 뿌리 정리', pest: '예: 잎 뒷면 응애, 물샤워 후 약 뿌림', move: '예: 베란다 → 거실 창가', newleaf: '예: 찢잎 나옴!', check: '예: 겉흙 2cm 아직 촉촉' }[type]) || '';
+  }
+  function syncSheet() {
+    const f = $('#logForm'); if (!f || !sheet) return;
+    sheet.plantId = f.plantId.value; sheet.date = f.date.value || today(); sheet.note = f.note.value;
+    if (f.count) sheet.count = f.count.value;
+  }
+
+  /* ───────── 사진 고르기 ───────── */
+  let pickFor = null;
+  function pickPhoto(target) { pickFor = target; const i = $('#filePhoto'); i.value = ''; i.click(); }
+  $('#filePhoto').addEventListener('change', async e => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const data = await compress(file);
+      if (pickFor === 'plant' && draft) { syncDraft(); draft.newPhoto = data; render(); }
+      else if (pickFor === 'log' && sheet) { syncSheet(); sheet.photo = data; renderSheet(); }
+    } catch (err) { toast(err.message); }
+  });
+
+  function syncDraft() {
+    const f = $('#plantForm'); if (!f || !draft) return;
+    draft.values = Object.fromEntries(new FormData(f));
+    draft.values.checkMode = f.checkMode.checked;
+    draft.every = f.waterEvery.value;
+  }
+  // 다시 그린 폼에 입력하던 값 되살리기
+  function restoreDraft() {
+    const f = $('#plantForm'); if (!f || !draft || !draft.values) return;
+    for (const [k, v] of Object.entries(draft.values)) {
+      if (!f[k]) continue;
+      if (f[k].type === 'checkbox') f[k].checked = !!v; else f[k].value = v;
+    }
+  }
+
+  /* ───────── 동작 ───────── */
+  function go(patch) {
+    Object.assign(ui, patch);
+    render();
+    window.scrollTo(0, 0);
+  }
+  const navStack = [];
+  function pushNav(patch) {
+    navStack.push({ tab: ui.tab, plant: ui.plant, edit: ui.edit });
+    history.pushState({ cg: navStack.length }, '');
+    go(patch);
+  }
+  function back() {
+    if (navStack.length) history.back();
+    else { draft = null; go({ edit: null, plant: null }); }
+  }
+  window.addEventListener('popstate', () => {
+    if (sheet) { sheet = null; renderSheet(); history.pushState({ cg: navStack.length }, ''); return; }
+    const prev = navStack.pop();
+    draft = null;
+    go(prev || { edit: null, plant: null });
+  });
+
+  function water(ids) {
+    const added = ids.map(id => addLog(id, 'water'));
+    save(); render();
+    const names = ids.map(id => plantById(id).name);
+    toast((names.length > 1 ? names.length + '개 식물' : names[0]) + '에 물 준 걸 기록했어요 💧', () => { removeLogs(added.map(l => l.id)); save(); render(); });
+  }
+
+  document.addEventListener('click', async e => {
+    const el = e.target.closest('[data-act]'); if (!el) return;
+    const act = el.dataset.act, id = el.dataset.id;
+    if (act === 'closeSheet') { if (e.target === el || el.classList.contains('x')) { sheet = null; renderSheet(); } return; }
+    if (el.tagName === 'A') e.preventDefault();
+    switch (act) {
+      case 'tab':
+        navStack.length = 0; draft = null; sheet = null; renderSheet();
+        go({ tab: id, plant: null, edit: null }); break;
+      case 'back': back(); break;
+      case 'open': if (sheet) { sheet = null; renderSheet(); } pushNav({ plant: id, edit: null }); break;
+      case 'new': draft = null; pushNav({ edit: 'new' }); break;
+      case 'edit': draft = null; pushNav({ edit: id }); break;
+      case 'every': syncDraft(); draft.every = el.dataset.n; draft.values.waterEvery = el.dataset.n; render(); restoreDraft(); break;
+      case 'pickPhoto': pickPhoto(el.dataset.for); break;
+      case 'dropPhoto': syncDraft(); draft.newPhoto = null; draft.photo = null; render(); restoreDraft(); break;
+      case 'dropLogPhoto': syncSheet(); sheet.photo = null; renderSheet(); break;
+      case 'water': water([id]); break;
+      case 'waterAll': water(waterDue().map(x => x.p.id)); break;
+      case 'snooze': {
+        const l = addLog(id, 'check', { note: '아직 촉촉해서 미룸' }); save(); render();
+        toast(S.settings.recheck + '일 뒤에 다시 알려 드릴게요', () => { removeLogs([l.id]); save(); render(); }); break;
+      }
+      case 'fert': {
+        const l = addLog(id, 'fertilize'); save(); render();
+        toast('비료 준 걸 기록했어요 🧪', () => { removeLogs([l.id]); save(); render(); }); break;
+      }
+      case 'fertSkip': {
+        const l = addLog(id, 'fertilize', { note: '건너뜀', skipped: true }); save(); render();
+        toast('이번 비료는 건너뛰었어요', () => { removeLogs([l.id]); save(); render(); }); break;
+      }
+      case 'log': openLogSheet(id, el.dataset.type); break;
+      case 'logPick': openLogSheet(ui.logPlant || null, ui.logType || 'water'); break;
+      case 'delLog': {
+        const l = S.logs.find(x => x.id === id); if (!l) break;
+        S.logs = S.logs.filter(x => x.id !== id); save(); render();
+        toast('기록을 지웠어요', () => { S.logs.push(l); save(); render(); });
+        setTimeout(() => { if (l.photo && !S.logs.includes(l)) dropPhotoIfUnused(l.photo); }, 5500);
+        break;
+      }
+      case 'view': {
+        const src = await photoGet(el.dataset.phId); if (!src) break;
+        $('#layer').innerHTML = '<div class="viewer" data-act="closeViewer" role="dialog" aria-label="사진 보기"><img alt="" src="' + src + '"><p>' + esc(el.dataset.cap || '') + '</p><p class="small">눌러서 닫기</p></div>';
+        break;
+      }
+      case 'closeViewer': $('#layer').innerHTML = ''; break;
+      case 'archive': {
+        const p = plantById(id); const note = prompt('보관하는 이유를 적어 두세요 (선택)', '');
+        if (note === null) break;
+        p.archived = true; p.archivedNote = note || '보관함'; save(); render(); toast('보관함으로 옮겼어요'); break;
+      }
+      case 'unarchive': { const p = plantById(id); p.archived = false; delete p.archivedNote; save(); render(); break; }
+      case 'delPlant': {
+        const p = plantById(id);
+        if (!confirm('"' + p.name + '"과(와) 기록 ' + logsOf(id).length + '건, 사진을 모두 지울까요? 되돌릴 수 없어요.')) break;
+        S.plants = S.plants.filter(x => x.id !== id);
+        removeLogs(logsOf(id).map(l => l.id));
+        dropPhotoIfUnused(p.photo); save();
+        navStack.length = 0; go({ plant: null, edit: null, tab: 'plants' }); toast('삭제했어요'); break;
+      }
+      case 'theme': S.settings.theme = el.dataset.v; save(); render(); break;
+      case 'export': exportBackup(); break;
+      case 'import': $('#fileBackup').value = ''; $('#fileBackup').click(); break;
+      case 'sample': seed(); save(); go({ tab: 'today', plant: null, edit: null }); toast('예시 식물 4개를 넣었어요'); break;
+      case 'clearSample':
+        if (!confirm('예시 식물과 기록을 지우고 빈 정원으로 시작할까요?')) break;
+        await wipe(); go({ tab: 'today' }); break;
+      case 'reset':
+        if (!confirm('모든 식물·기록·사진을 지울까요? 백업 파일이 없으면 되돌릴 수 없어요.')) break;
+        await wipe(); go({ tab: 'today', plant: null, edit: null }); toast('모두 지웠어요'); break;
+    }
+  });
+
+  async function wipe() {
+    await photoClear();
+    const theme = S.settings.theme;
+    S = defaults(); S.settings.theme = theme; save();
+  }
+
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t.id === 'logType') { ui.logType = t.value; render(); }
+    else if (t.id === 'logPlant') { ui.logPlant = t.value; render(); }
+    else if (t.id === 'lType') { syncSheet(); sheet.type = t.value; renderSheet(); }
+    else if (t.closest('#setForm')) {
+      const f = $('#setForm');
+      S.settings.winter = f.winter.checked;
+      S.settings.winterFactor = Number(f.winterFactor.value);
+      S.settings.recheck = Number(f.recheck.value);
+      S.settings.fertGrowOnly = f.fertGrowOnly.checked;
+      save(); toast('설정을 저장했어요');
+    }
+  });
+  document.addEventListener('input', e => {
+    if (e.target.id === 'fEvery') document.querySelectorAll('[data-act="every"]').forEach(c => c.classList.toggle('on', c.dataset.n === e.target.value));
+  });
+
+  document.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (e.target.id === 'plantForm') await savePlant(e.target);
+    else if (e.target.id === 'logForm') await saveLog(e.target);
+  });
+
+  async function savePlant(f) {
+    const v = Object.fromEntries(new FormData(f));
+    const name = (v.name || '').trim();
+    if (!name) { f.name.focus(); return; }
+    const isNew = ui.edit === 'new';
+    const p = isNew ? { id: nid('p'), created: today() } : plantById(ui.edit);
+    Object.assign(p, {
+      name, species: v.species.trim(), location: v.location.trim(), light: v.light,
+      waterEvery: Math.min(120, Math.max(1, parseInt(v.waterEvery, 10) || 7)),
+      checkMode: f.checkMode.checked,
+      fertEvery: Math.min(365, Math.max(0, parseInt(v.fertEvery, 10) || 0)),
+      potMaterial: v.potMaterial, potSize: v.potSize.trim(), soil: v.soil.trim(),
+      acquired: isDate(v.acquired) ? v.acquired : '', price: Math.max(0, parseInt(v.price, 10) || 0) || '',
+      source: v.source.trim(), memo: v.memo.trim(),
+    });
+    // 사진: 새로 골랐으면 저장, 뺐으면 삭제
+    const oldPhoto = p.photo;
+    if (draft && draft.newPhoto) {
+      const pid = nid('ph'); await photoPut(pid, draft.newPhoto); p.photo = pid;
+      // 대표 사진도 성장 사진 타임라인에 남김 (같은 사진을 공유)
+      addLog(p.id, 'photo', { photo: pid, note: isNew ? '처음 데려온 날' : '대표 사진 변경' });
+    } else if (draft && !draft.photo) p.photo = null;
+    if (oldPhoto && oldPhoto !== p.photo) dropPhotoIfUnused(oldPhoto);
+    if (isNew) {
+      if (isDate(v.lastWater)) addLog(p.id, 'water', { date: v.lastWater, note: '등록할 때 입력' });
+      S.plants.push(p);
+    }
+    if (S.sample && isNew) S.sample = false;
+    save();
+    draft = null;
+    navStack.pop(); history.replaceState({ cg: navStack.length }, '');
+    if (isNew) { navStack.push({ tab: ui.tab, plant: null, edit: null }); go({ edit: null, plant: p.id }); toast('🐣 ' + name + '을(를) 정원에 들였어요'); }
+    else { go({ edit: null, plant: p.id }); toast('저장했어요'); }
+  }
+
+  async function saveLog(f) {
+    syncSheet();
+    const s = sheet; if (!s || !plantById(s.plantId)) return;
+    const extra = { date: isDate(s.date) && s.date <= today() ? s.date : today(), note: s.note.trim() };
+    if (s.type === 'newleaf' && Number(s.count) > 0) extra.count = Math.min(99, parseInt(s.count, 10));
+    if (s.photo) { const pid = nid('ph'); await photoPut(pid, s.photo); extra.photo = pid; }
+    if (s.type === 'photo' && !extra.photo && !extra.note) { toast('사진이나 메모를 넣어 주세요'); return; }
+    addLog(s.plantId, s.type, extra);
+    sheet = null; renderSheet(); save(); render();
+    toast(LOG_TYPES[s.type].ic + ' ' + LOG_TYPES[s.type].label + ' 기록했어요');
+  }
+
+  /* ───────── 백업 ───────── */
+  async function exportBackup() {
+    try {
+      const photos = await photoAll();
+      S.lastBackup = new Date().toISOString();
+      const data = { app: 'chick-garden', v: 1, exported: S.lastBackup, state: S, photos };
+      const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'chick-garden-backup-' + today() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      save(); render();
+      toast('백업 파일을 저장했어요 (' + (blob.size / 1048576).toFixed(1) + 'MB). 클라우드나 메일에 보관해 두세요.');
+    } catch (err) { toast('백업에 실패했어요: ' + err.message); }
+  }
+  $('#fileBackup').addEventListener('change', async e => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!data || data.app !== 'chick-garden' || !data.state || !Array.isArray(data.state.plants)) throw new Error('병아리 정원 백업 파일이 아니에요');
+      const st = data.state;
+      if (!confirm('백업(' + (data.exported ? fmtDate(data.exported.slice(0, 10)) : '날짜 모름') + ', 식물 ' + st.plants.length + '개 · 기록 ' + (st.logs || []).length + '건)으로 지금 데이터를 바꿀까요?')) return;
+      await photoClear();
+      for (const [k, v] of Object.entries(data.photos || {})) if (typeof v === 'string' && v.startsWith('data:image/')) await photoPut(k, v);
+      const d = defaults();
+      S = Object.assign(d, st, { settings: Object.assign(d.settings, st.settings || {}), logs: Array.isArray(st.logs) ? st.logs : [] });
+      save(); navStack.length = 0; go({ tab: 'today', plant: null, edit: null });
+      toast('백업을 불러왔어요');
+    } catch (err) { toast('불러오기 실패: ' + err.message); }
+  });
+
+  /* ───────── 예시 데이터 ───────── */
+  function seed() {
+    const t = today();
+    const mk = (name, species, location, light, every, extra) => {
+      const p = Object.assign({ id: nid('p'), name, species, location, light, waterEvery: every, checkMode: false, fertEvery: 0, created: addDays(t, -120) }, extra);
+      S.plants.push(p); return p;
+    };
+    const a = mk('몬순이', '몬스테라 델리시오사', '거실 창가', '밝은 간접광', 7, { fertEvery: 30, acquired: addDays(t, -400), potMaterial: '플라스틱', potSize: '지름 21cm', soil: '상토 6 : 펄라이트 4', source: '동네 화원', price: 25000, memo: '잎이 처지면 물 줄 때. 새잎은 창 쪽으로 나옴.' });
+    const b = mk('스투키', '산세베리아 스투키', '침실', '반그늘', 21, { checkMode: true, acquired: addDays(t, -800), potMaterial: '세라믹' });
+    const c = mk('바질', '스위트 바질', '베란다', '직광', 2, { fertEvery: 14, acquired: addDays(t, -40), source: '씨앗 파종' });
+    const d = mk('필레아', '필레아 페페로미오이데스', '주방', '밝은 간접광', 5, { acquired: addDays(t, -200), source: '친구 나눔' });
+    const L = (p, type, ago, extra) => addLog(p.id, type, Object.assign({ date: addDays(t, -ago) }, extra));
+    L(a, 'water', 8); L(a, 'water', 15); L(a, 'fertilize', 32, { note: '하이포넥스 1000배' }); L(a, 'newleaf', 10, { count: 1, note: '찢잎 나옴!' }); L(a, 'repot', 120, { note: '18cm → 21cm' });
+    L(b, 'water', 22); L(b, 'check', 1, { note: '아직 촉촉해서 미룸' });
+    L(c, 'water', 1); L(c, 'prune', 3, { note: '꽃대 제거' });
+    L(d, 'water', 5); L(d, 'newleaf', 4, { count: 2 }); L(d, 'pest', 30, { note: '잎 뒷면 응애 → 물샤워' });
+    S.sample = true;
+  }
+
+  /* ───────── 시작 ───────── */
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !ui.edit && !sheet) render(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (sheet) { sheet = null; renderSheet(); } else $('#layer').innerHTML = ''; } });
+  // 폼을 다시 그린 뒤 입력값 복원 (사진 고른 뒤 등)
+  const origRender = render;
+  render = function () { origRender(); if (ui.edit) restoreDraft(); };
+
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  render();
+  updateBadge();
+
+  // 테스트용 훅
+  window.__cg = { waterInfo, fertInfo, dueLabel, addDays, diffDays, get state() { return S; } };
+})();
+</script>
 </body>
 </html>

@@ -7,7 +7,7 @@
 | `index.html` (루트) | 앱 목록 안내 페이지 | `/` |
 | `household-budget/` | **우리집 가계부** (현재 주 작업 대상) | `/household-budget/` |
 | `sku-price-monitoring/` | 삼성 SKU 가격 모니터링 (서버리스 함수는 `sku-price-monitoring/netlify/functions/`) | `/sku-price-monitoring/` |
-| `chick-garden/` | 병아리 정원 — 식집사용 식물 관리 앱 (준비 중). **별도 Netlify 사이트**(Base directory `chick-garden`, 설정 `chick-garden/netlify.toml`) | 자체 사이트 루트 `/` |
+| `chick-garden/` | 병아리 정원 — 식집사용 식물 관리 앱 (첫 버전: 로컬 저장 PWA). **별도 Netlify 사이트**(Base directory `chick-garden`, 설정 `chick-garden/netlify.toml`). 구조·데이터·확인 방법은 `chick-garden/README.md` | 자체 사이트 루트 `/` |
 
 - 모든 앱은 Netlify 사이트 `skupricemonitoring` 하나로 배포됩니다 (루트 `netlify.toml`, publish = 저장소 루트 → 폴더명이 곧 주소).
 - 루트의 `netlify.toml`·`package.json`(가격 모니터링 함수 의존성)은 공용 설정이라 루트에 둡니다.
