@@ -1,7 +1,7 @@
 // 병아리 정원 서비스 워커: 오프라인에서도 앱이 열리도록 앱 파일만 캐시합니다.
 // 사용자 데이터(localStorage·IndexedDB)는 캐시와 무관하며 외부로 보내지 않습니다.
 // 앱 파일 구성을 바꾸면 CACHE 버전을 올리세요.
-const CACHE = 'cg-v2';
+const CACHE = 'cg-v3';
 const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
