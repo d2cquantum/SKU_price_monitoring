@@ -11,4 +11,11 @@
 //   projectId: "내프로젝트",
 //   appId: "1:000000000000:web:0000000000000000"
 // };
-window.CG_FIREBASE = null;
+window.CG_FIREBASE = {
+  apiKey: "AIzaSyC7feWlUGaeYGGIh-_Q4nYZ1qL0jVwgkjc",
+  authDomain: "chick-garden.firebaseapp.com",
+  projectId: "chick-garden",
+  storageBucket: "chick-garden.firebasestorage.app",
+  messagingSenderId: "369143866412",
+  appId: "1:369143866412:web:4ff4ae84a3410b82e69d89"
+};
