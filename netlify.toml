@@ -3,8 +3,8 @@
 # ─────────────────────────────────────────────────
 
 [build]
-  publish   = "."               # 정적 파일 루트 (index.html 위치)
-  functions = "netlify/functions" # 서버리스 함수 폴더
+  publish   = "."               # 저장소 루트 (앱별 폴더가 각각 /폴더명/ 주소로 배포)
+  functions = "sku-price-monitoring/netlify/functions" # 가격 모니터링 서버리스 함수 폴더
 
 [functions]
   node_bundler = "esbuild"      # 빠른 번들링 (axios/cheerio 포함)

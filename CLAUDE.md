@@ -1,13 +1,16 @@
 # CLAUDE.md
 
-이 저장소에는 서로 독립된 앱 두 개가 있습니다.
+이 저장소(`d2cquantum/OH_repository`)는 **앱마다 폴더 하나**로 관리합니다.
 
-| 경로 | 앱 | 비고 |
+| 경로 | 앱 | 주소 |
 |---|---|---|
-| 루트 (`index.html`, `app.js`, `style.css`, `netlify/functions/`) | 삼성 SKU 가격 모니터링 | 기존 앱. 가계부 작업 중에는 **건드리지 않는다** |
-| `household-budget/` | **우리집 가계부** (현재 주 작업 대상) | 아래 설명 전부 |
+| `index.html` (루트) | 앱 목록 안내 페이지 | `/` |
+| `household-budget/` | **우리집 가계부** (현재 주 작업 대상) | `/household-budget/` |
+| `sku-price-monitoring/` | 삼성 SKU 가격 모니터링 (서버리스 함수는 `sku-price-monitoring/netlify/functions/`) | `/sku-price-monitoring/` |
 
-두 앱 모두 Netlify 사이트 `skupricemonitoring`으로 배포됩니다 (`netlify.toml`, publish = 저장소 루트).
+- 모든 앱은 Netlify 사이트 `skupricemonitoring` 하나로 배포됩니다 (루트 `netlify.toml`, publish = 저장소 루트 → 폴더명이 곧 주소).
+- 루트의 `netlify.toml`·`package.json`(가격 모니터링 함수 의존성)은 공용 설정이라 루트에 둡니다.
+- **새 앱 추가:** 새 폴더를 만들고 루트 `index.html` 목록과 위 표에 한 줄 추가. 한 앱 작업 중에는 다른 앱 폴더를 건드리지 않는다.
 
 ---
 
@@ -67,13 +70,14 @@ IIFE 하나 안에 다음 순서로 들어 있다.
 
 - **개인정보:** 사용자의 실제 거래·문자·엑셀 내용, 이름, 카드번호, 계좌번호를 커밋·코드 예시·테스트 데이터에 넣지 않는다. 파서 개선용 샘플은 사용자가 가린 것을 바탕으로 **가상의 값으로 바꿔서** 사용.
 - **로컬 전용 원칙 유지:** 거래 데이터를 외부로 보내는 코드(분석, 로그, API 호출)를 추가하지 않는다. 외부 스크립트는 cdnjs의 SheetJS·pdf.js와 Google Fonts뿐 (파일 내용은 브라우저 안에서만 처리).
-- **확인 방법:** 빌드·테스트 프레임워크 없음. 수정 후 Playwright(헤드리스 Chromium)로 index.html을 열어 (Playwright가 없으면 데스크톱 앱 내장 브라우저로 같은 항목 확인)
+- **확인 방법:** 빌드·테스트 프레임워크 없음. 수정 후 Playwright(헤드리스 Chromium)로 index.html을 열어
+ (Playwright가 없으면 데스크톱 앱 내장 브라우저로 같은 항목 확인)
   1. 콘솔 오류 없음
   2. 가져오기 탭의 예시 문자 5건이 모두 올바른 기관·금액·가맹점으로 파싱되는지
   3. `window.__hb.mapRows()`에 은행형(제목 줄 + 입금/출금 열)·카드형 표를 넣어 결과 확인
   4. 390px 폭 라이트/다크 스크린샷
 - **브랜치·PR:** 기본 브랜치 `main`. 작업은 새 브랜치에서 하고 PR로 병합. PR 열면 Netlify가 `deploy-preview-<번호>--skupricemonitoring.netlify.app/household-budget/` 미리보기를 만든다.
-- 기존 가격 모니터링 앱 파일과 `netlify.toml`은 가계부 작업 범위 밖이다.
+- `sku-price-monitoring/` 폴더와 `netlify.toml`은 가계부 작업 범위 밖이다.
 
 ## 현재 상태와 다음 할 일
 
